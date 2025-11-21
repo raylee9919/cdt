@@ -56,6 +56,28 @@ static void demo_scroll_callback(GLFWwindow *window, double xoffset, double yoff
 static void demo_mouse_button_callback(GLFWwindow *window, int button, int action, int mods);
 static void demo_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
 
+struct V2 {
+    float x, y;
+};
+
+static V2 operator - (V2 a, V2 b) {
+    return V2{a.x-b.x, a.y-b.y};
+}
+
+static float cross(V2 a, V2 b) {
+    return a.x*b.y - a.y*b.x;
+}
+
+static bool in_triangle(V2 p, V2 a, V2 b, V2 c) {
+    V2 ap = p-a;
+    V2 bp = p-b;
+    V2 cp = p-c;
+    float ca = cross(b-a, ap);
+    float cb = cross(c-b, bp);
+    float cc = cross(a-c, cp);
+    if (ca>0.f && cb>0.f && cc>0.f) { return true; }
+    return false;
+}
 
 int main(void) {
     glfwSetErrorCallback(glfw_error_callback);
@@ -97,6 +119,95 @@ int main(void) {
 
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
+
+    // Ear clipping triangulation test.
+    //
+    V2 test_points[] = {
+        {   3.f,  48.f},
+        {  52.f,   8.f},
+        {  99.f,  50.f},
+        { 138.f,  25.f},
+        { 175.f,  77.f},
+        { 131.f,  72.f},
+        { 111.f, 113.f},
+        {  72.f,  43.f},
+        {  26.f,  55.f},
+        {  29.f, 100.f},
+    };
+    int n = arrcnt(test_points);
+    std::list<int> verts;
+    std::list<int> convex;
+    std::list<int> reflex;
+    std::list<int> ears;
+
+    std::vector<int> indices;
+
+    for (int i = 0; i < n; ++i) { verts.push_back(i); }
+
+    for (int i0 = 0; i0 < n; ++i0) {
+        int i1 = (i0+1)%n;
+        int i2 = (i1+1)%n;
+
+        V2 p0 = test_points[i0];
+        V2 p1 = test_points[i1];
+        V2 p2 = test_points[i2];
+
+        V2 e01 = p1 - p0;
+        V2 e12 = p2 - p1;
+
+        float c = cross(e01, e12);
+        if (c > 0.f) {
+            convex.push_back(i1);
+
+            bool is_ear = 1;
+            for (int i=1; i <= n-3; i+=1) {
+                int idx = (i2 + i) % n;
+                V2 p = test_points[idx];
+
+                if (in_triangle(p, p0, p1, p2)) {
+                    is_ear = 0;
+                    break;
+                }
+            }
+            if (is_ear) { ears.push_back(i1); }
+        } else if (c < 0.f) {
+            reflex.push_back(i1);
+        } else {
+            app_assert("!Collinear degenerate detected!");
+        }
+    }
+
+
+    while (verts.size() != 3) {
+        // Pop an ear tip.
+        int ear = ears.front();
+        ears.pop_front();
+
+        // Remove ear tip from the vertex list.
+        auto it = std::find(verts.begin(), verts.end(), ear);
+        int l   = *std::prev(it);
+        int r   = *std::next(it);
+        int ll  = *std::prev(std::prev(it));
+        int rr  = *std::next(std::next(it));
+        verts.remove(ear);
+
+        V2 pl  = test_points[l];
+        V2 pr  = test_points[r];
+        V2 pll = test_points[ll];
+        V2 prr = test_points[rr];
+
+        // Push 3 indices for drawing. Equivalent to creating a triangle.
+        indices.push_back(ear);
+        indices.push_back(r);
+        indices.push_back(l);
+    }
+
+    // Push remaining 3 indices.
+    while (!verts.empty()) {
+        indices.push_back(verts.front());
+        verts.pop_front();
+    }
+
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();    
@@ -147,9 +258,9 @@ int main(void) {
         }
 
 
-        // Draw Edges
+        // Draw edges in cdt'ed subdivision.
         //
-#if 1
+#if 0
         glUseProgram(simpleshader);
         glEnableVertexAttribArray(0);
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
