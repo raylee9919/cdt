@@ -10,14 +10,18 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <time.h>
+
+#include <vector>
 
 #include "vendor/glad/glad.h"
 #include "vendor/GLFW/glfw3.h"
 
-#define app_assert(exp) if (!(exp)) { *(volatile int *)0 = 0; }
+#define assert(exp) if (!(exp)) { *(volatile int *)0 = 0; }
 #define arrcnt(arr) (sizeof(arr)/sizeof(arr[0]))
 
 #include "demo_gl.h"
+#include "demo_log.h"
 #include "../cdt.h"
 
 
@@ -29,6 +33,7 @@ float scale = 0.0125f;
 float polygon_scale = 1.f;
 Context *ctx;
 std::list<int> constrains;
+FILE *insert_log_file;
 
 
 #if 0
@@ -42,7 +47,7 @@ float points[][2] = {
 
 #else
 /* Pentagon */
-float points[][2] = {
+float g_points[][2] = {
     { 1.000000f,  0.000000f},
     { 0.309016f,  0.951056f},
     {-0.809016f,  0.587785f},
@@ -52,32 +57,14 @@ float points[][2] = {
 #endif
 
 
+
+
 static void demo_scroll_callback(GLFWwindow *window, double xoffset, double yoffset);
 static void demo_mouse_button_callback(GLFWwindow *window, int button, int action, int mods);
 static void demo_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
+static void demo_drop_callback(GLFWwindow *window, int count, const char **paths);
 
-struct V2 {
-    float x, y;
-};
 
-static V2 operator - (V2 a, V2 b) {
-    return V2{a.x-b.x, a.y-b.y};
-}
-
-static float cross(V2 a, V2 b) {
-    return a.x*b.y - a.y*b.x;
-}
-
-static bool in_triangle(V2 p, V2 a, V2 b, V2 c) {
-    V2 ap = p-a;
-    V2 bp = p-b;
-    V2 cp = p-c;
-    float ca = cross(b-a, ap);
-    float cb = cross(c-b, bp);
-    float cc = cross(a-c, cp);
-    if (ca>0.f && cb>0.f && cc>0.f) { return true; }
-    return false;
-}
 
 int main(void) {
     glfwSetErrorCallback(glfw_error_callback);
@@ -91,6 +78,7 @@ int main(void) {
     glfwSetScrollCallback(window, demo_scroll_callback);
     glfwSetMouseButtonCallback(window, demo_mouse_button_callback);
     glfwSetKeyCallback(window, demo_key_callback);
+    glfwSetDropCallback(window, demo_drop_callback);
 
     gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
 
@@ -109,9 +97,28 @@ int main(void) {
 
     GLuint simpleshader = glcreateshader(simple_vs, simple_fs);
 
-    
+    // Init
+    //
     ctx = new Context;
-    cdt_init(ctx, 0, 200.f, -200.f, -200.f, 200.f, -200.f);
+    cdt_init(ctx, 0, 300.f, -300.f, -300.f, 300.f, -300.f);
+
+
+
+
+    char log_file_name[64];
+    time_t now = time(0);
+    strftime(log_file_name, sizeof(log_file_name), "insert_%Y%m%d_%H%M%S.log", localtime(&now));
+    insert_log_file = fopen(log_file_name, "wb");
+    if (!insert_log_file) {
+        fprintf(stderr, "[Error] Could not open insert log.\n");
+        return -1;
+    } else {
+        // Disabling file cache won't discard data even if we kill the process  
+        // in a debugger.
+        setvbuf(insert_log_file, NULL, _IONBF, 0);
+    }
+
+    
 
 
     GLuint simpleshader_scale = glad_glGetUniformLocation(simpleshader, "scale");
@@ -119,94 +126,6 @@ int main(void) {
 
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
-
-    // Ear clipping triangulation test.
-    //
-    V2 test_points[] = {
-        {   3.f,  48.f},
-        {  52.f,   8.f},
-        {  99.f,  50.f},
-        { 138.f,  25.f},
-        { 175.f,  77.f},
-        { 131.f,  72.f},
-        { 111.f, 113.f},
-        {  72.f,  43.f},
-        {  26.f,  55.f},
-        {  29.f, 100.f},
-    };
-    int n = arrcnt(test_points);
-    std::list<int> verts;
-    std::list<int> convex;
-    std::list<int> reflex;
-    std::list<int> ears;
-
-    std::vector<int> indices;
-
-    for (int i = 0; i < n; ++i) { verts.push_back(i); }
-
-    for (int i0 = 0; i0 < n; ++i0) {
-        int i1 = (i0+1)%n;
-        int i2 = (i1+1)%n;
-
-        V2 p0 = test_points[i0];
-        V2 p1 = test_points[i1];
-        V2 p2 = test_points[i2];
-
-        V2 e01 = p1 - p0;
-        V2 e12 = p2 - p1;
-
-        float c = cross(e01, e12);
-        if (c > 0.f) {
-            convex.push_back(i1);
-
-            bool is_ear = 1;
-            for (int i=1; i <= n-3; i+=1) {
-                int idx = (i2 + i) % n;
-                V2 p = test_points[idx];
-
-                if (in_triangle(p, p0, p1, p2)) {
-                    is_ear = 0;
-                    break;
-                }
-            }
-            if (is_ear) { ears.push_back(i1); }
-        } else if (c < 0.f) {
-            reflex.push_back(i1);
-        } else {
-            app_assert("!Collinear degenerate detected!");
-        }
-    }
-
-
-    while (verts.size() != 3) {
-        // Pop an ear tip.
-        int ear = ears.front();
-        ears.pop_front();
-
-        // Remove ear tip from the vertex list.
-        auto it = std::find(verts.begin(), verts.end(), ear);
-        int l   = *std::prev(it);
-        int r   = *std::next(it);
-        int ll  = *std::prev(std::prev(it));
-        int rr  = *std::next(std::next(it));
-        verts.remove(ear);
-
-        V2 pl  = test_points[l];
-        V2 pr  = test_points[r];
-        V2 pll = test_points[ll];
-        V2 prr = test_points[rr];
-
-        // Push 3 indices for drawing. Equivalent to creating a triangle.
-        indices.push_back(ear);
-        indices.push_back(r);
-        indices.push_back(l);
-    }
-
-    // Push remaining 3 indices.
-    while (!verts.empty()) {
-        indices.push_back(verts.front());
-        verts.pop_front();
-    }
 
 
     while (!glfwWindowShouldClose(window)) {
@@ -246,11 +165,11 @@ int main(void) {
             float mx = (float)xn/scale;
             float my = (float)yn/scale;
 
-            for (int i = 0; i < arrcnt(points); i += 1) {
-                float x1 = polygon_scale*points[i][0];
-                float y1 = polygon_scale*points[i][1];
-                float x2 = polygon_scale*points[(i+1)%arrcnt(points)][0];
-                float y2 = polygon_scale*points[(i+1)%arrcnt(points)][1];
+            for (int i = 0; i < arrcnt(g_points); i += 1) {
+                float x1 = polygon_scale*g_points[i][0];
+                float y1 = polygon_scale*g_points[i][1];
+                float x2 = polygon_scale*g_points[(i+1)%arrcnt(g_points)][0];
+                float y2 = polygon_scale*g_points[(i+1)%arrcnt(g_points)][1];
                 edge_end_points.push_back(Vec2{mx+x1,my+y1});
                 edge_end_points.push_back(Vec2{mx+x2,my+y2});
                 constrained_list.push_back(false);
@@ -260,7 +179,7 @@ int main(void) {
 
         // Draw edges in cdt'ed subdivision.
         //
-#if 0
+#if 1
         glUseProgram(simpleshader);
         glEnableVertexAttribArray(0);
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
@@ -283,9 +202,11 @@ int main(void) {
         glUseProgram(0);
 #endif
 
+
         glfwSwapBuffers(window);
     }
 
+    fclose(insert_log_file);
     return 0;
 }
 
@@ -299,33 +220,47 @@ static void demo_scroll_callback(GLFWwindow *window, double xoffset, double yoff
     }
 }
 
+static void demo_cdt_insert_with_log(float x1, float y1, float x2, float y2) {
+    fprintf(insert_log_file, "0x%08X 0x%08X 0x%08X 0x%08X\n", *((uint32_t *)&x1), *((uint32_t *)&y1), *((uint32_t *)&x2), *((uint32_t *)&y2));
+    cdt_insert(ctx, next_gen_id, x1, y1, x2, y2);
+}
+
+static void demo_cdt_insert(GLFWwindow *window) {
+    double xpos, ypos;
+    glfwGetCursorPos(window, &xpos, &ypos);
+
+    int wi, hi;
+    glfwGetFramebufferSize(window, &wi, &hi);
+    double w = (double)wi;
+    double h = (double)hi;
+
+    double xn =   (xpos / w)*2.f - 1.f;
+    double yn = -((ypos / h)*2.f - 1.f);
+
+    float x = (float)xn/scale;
+    float y = (float)yn/scale;
+
+
+    for (int i = 0; i < arrcnt(g_points); i += 1) {
+        float x1 = x + polygon_scale*g_points[i][0];
+        float y1 = y + polygon_scale*g_points[i][1];
+        float x2 = x + polygon_scale*g_points[(i+1)%arrcnt(g_points)][0];
+        float y2 = y + polygon_scale*g_points[(i+1)%arrcnt(g_points)][1];
+
+        demo_cdt_insert_with_log(x1, y1, x2, y2);
+    }
+
+    fprintf(insert_log_file, ";\n");
+
+    constrains.push_back(next_gen_id);
+    next_gen_id += 1;
+}
+
+// Callbacks
+//
 static void demo_mouse_button_callback(GLFWwindow *window, int button, int action, int mods) {
     if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
-        double xpos, ypos;
-        glfwGetCursorPos(window, &xpos, &ypos);
-
-        int wi, hi;
-        glfwGetFramebufferSize(window, &wi, &hi);
-        double w = (double)wi;
-        double h = (double)hi;
-
-        double xn =   (xpos / w)*2.f - 1.f;
-        double yn = -((ypos / h)*2.f - 1.f);
-
-        float x = (float)xn/scale;
-        float y = (float)yn/scale;
-
-        for (int i = 0; i < arrcnt(points); i += 1) {
-            float x1 = x + polygon_scale*points[i][0];
-            float y1 = y + polygon_scale*points[i][1];
-            float x2 = x + polygon_scale*points[(i+1)%arrcnt(points)][0];
-            float y2 = y + polygon_scale*points[(i+1)%arrcnt(points)][1];
-            cdt_insert(ctx, next_gen_id, x1, y1, x2, y2);
-        }
-
-        constrains.push_back(next_gen_id);
-        printf("[App] Add constrain ID %u\n", next_gen_id);
-        next_gen_id += 1;
+        demo_cdt_insert(window);
     }
 }
 
@@ -334,6 +269,26 @@ static void demo_key_callback(GLFWwindow* window, int key, int scancode, int act
         int id = constrains.front();
         cdt_remove(ctx, id);
         constrains.pop_front();
-        printf("[App] Removed constrain ID: %u\n", id);
+    }
+}
+
+static void demo_drop_callback(GLFWwindow *window, int count, const char **paths) {
+    if (count == 1) {
+        // Redo log
+        //
+        const char *log_file_name = paths[0];
+        Parse_Result parse = float_array_from_log_file(log_file_name);  
+        int offset = 0;
+        for (int n : parse.counts) {
+            for (int i = 0; i < n; i +=4) {
+                float x1 = parse.floats[offset + i];
+                float y1 = parse.floats[offset + i+1];
+                float x2 = parse.floats[offset + i+2];
+                float y2 = parse.floats[offset + i+3];
+                demo_cdt_insert_with_log(x1, y1, x2, y2);
+            }
+            fprintf(insert_log_file, ";\n");
+            offset += n;
+        }
     }
 }

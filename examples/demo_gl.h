@@ -58,7 +58,7 @@ GLuint glcreateshader(const char *vsrc, const char *fsrc) {
             GLchar plog[1024];
             glGetProgramInfoLog(program, sizeof(plog), &stub, plog);
 
-            app_assert(!"s");
+            assert(!"s");
         }
 
         glDeleteShader(vshader);
