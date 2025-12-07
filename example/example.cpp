@@ -20,18 +20,19 @@
 #define assert(exp) if (!(exp)) { *(volatile int *)0 = 0; }
 #define arrcnt(arr) (sizeof(arr)/sizeof(arr[0]))
 
-#include "demo_gl.h"
-#include "demo_log.h"
+#include "example_gl.h"
+#include "example_log.h"
 #include "../cdt.h"
 
 
+#include <list>
 
 // Globals
 //
 int next_gen_id = 1;
 float scale = 0.0125f;
 float polygon_scale = 1.f;
-Context *ctx;
+cdt_context *ctx;
 std::list<int> constrains;
 FILE *insert_log_file;
 
@@ -99,7 +100,7 @@ int main(void) {
 
     // Init
     //
-    ctx = new Context;
+    ctx = (cdt_context *)malloc(sizeof(cdt_context));
     cdt_init(ctx, 0, 300.f, -300.f, -300.f, 300.f, -300.f);
 
 
@@ -124,7 +125,7 @@ int main(void) {
     GLuint simpleshader_scale = glad_glGetUniformLocation(simpleshader, "scale");
     GLuint simpleshader_color = glad_glGetUniformLocation(simpleshader, "color");
 
-    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_DEPTH_TEST); 
     glDepthFunc(GL_LEQUAL);
 
 
@@ -144,15 +145,17 @@ int main(void) {
         glClearDepth(1.0f);
         glClear(GL_DEPTH_BUFFER_BIT);
 
-        std::vector<Vec2> edge_end_points;
-        for (Edge *e : ctx->edges) {
+        std::vector<cdt_vec2> edge_end_points;
+        for (int i = 0; i < ctx->edges.num; i+= 1) {
+            cdt_edge *e = ctx->edges.data[i];
             edge_end_points.push_back(e->e[0].org->pos);
             edge_end_points.push_back(e->e[2].org->pos);
         }
 
         std::vector<bool> constrained_list;
-        for (Edge *e : ctx->edges) {
-            constrained_list.push_back(constrained(&e->e[0]));
+        for (int i = 0; i < ctx->edges.num; i+= 1) {
+            cdt_edge *e = ctx->edges.data[i];
+            constrained_list.push_back(cdt_is_constrained(&e->e[0]));
         }
 
         { // Push polygon around mouse position for visual cue.
@@ -170,8 +173,8 @@ int main(void) {
                 float y1 = polygon_scale*g_points[i][1];
                 float x2 = polygon_scale*g_points[(i+1)%arrcnt(g_points)][0];
                 float y2 = polygon_scale*g_points[(i+1)%arrcnt(g_points)][1];
-                edge_end_points.push_back(Vec2{mx+x1,my+y1});
-                edge_end_points.push_back(Vec2{mx+x2,my+y2});
+                edge_end_points.push_back(cdt_vec2{mx+x1,my+y1});
+                edge_end_points.push_back(cdt_vec2{mx+x2,my+y2});
                 constrained_list.push_back(false);
             }
         }
@@ -184,7 +187,7 @@ int main(void) {
         glEnableVertexAttribArray(0);
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
         {
-            GLsizei sz = sizeof(Vec2);
+            GLsizei sz = sizeof(cdt_vec2);
             glVertexAttribPointer(0, 2, GL_FLOAT, false, sz, 0);
             glBufferData(GL_ARRAY_BUFFER, edge_end_points.size()*sz, edge_end_points.data(), GL_DYNAMIC_DRAW);
             glUniform1f(simpleshader_scale, scale);
@@ -225,32 +228,25 @@ static void demo_cdt_insert_with_log(float x1, float y1, float x2, float y2) {
     cdt_insert(ctx, next_gen_id, x1, y1, x2, y2);
 }
 
-static void demo_cdt_insert(GLFWwindow *window) {
-    double xpos, ypos;
-    glfwGetCursorPos(window, &xpos, &ypos);
-
-    int wi, hi;
-    glfwGetFramebufferSize(window, &wi, &hi);
-    double w = (double)wi;
-    double h = (double)hi;
-
-    double xn =   (xpos / w)*2.f - 1.f;
-    double yn = -((ypos / h)*2.f - 1.f);
-
-    float x = (float)xn/scale;
-    float y = (float)yn/scale;
-
-
+static void demo_cdt_insert(GLFWwindow *window, float x, float y) {
+    // Log first.
     for (int i = 0; i < arrcnt(g_points); i += 1) {
         float x1 = x + polygon_scale*g_points[i][0];
         float y1 = y + polygon_scale*g_points[i][1];
         float x2 = x + polygon_scale*g_points[(i+1)%arrcnt(g_points)][0];
         float y2 = y + polygon_scale*g_points[(i+1)%arrcnt(g_points)][1];
-
-        demo_cdt_insert_with_log(x1, y1, x2, y2);
+        fprintf(insert_log_file, "0x%08X 0x%08X 0x%08X 0x%08X\n", *((uint32_t *)&x1), *((uint32_t *)&y1), *((uint32_t *)&x2), *((uint32_t *)&y2));
     }
-
     fprintf(insert_log_file, ";\n");
+
+    // Insert afterwards.
+    for (int i = 0; i < arrcnt(g_points); i += 1) {
+        float x1 = x + polygon_scale*g_points[i][0];
+        float y1 = y + polygon_scale*g_points[i][1];
+        float x2 = x + polygon_scale*g_points[(i+1)%arrcnt(g_points)][0];
+        float y2 = y + polygon_scale*g_points[(i+1)%arrcnt(g_points)][1];
+        cdt_insert(ctx, next_gen_id, x1, y1, x2, y2);
+    }
 
     constrains.push_back(next_gen_id);
     next_gen_id += 1;
@@ -260,7 +256,21 @@ static void demo_cdt_insert(GLFWwindow *window) {
 //
 static void demo_mouse_button_callback(GLFWwindow *window, int button, int action, int mods) {
     if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
-        demo_cdt_insert(window);
+        double xpos, ypos;
+        glfwGetCursorPos(window, &xpos, &ypos);
+
+        int wi, hi;
+        glfwGetFramebufferSize(window, &wi, &hi);
+        double w = (double)wi;
+        double h = (double)hi;
+
+        double xn =   (xpos / w)*2.f - 1.f;
+        double yn = -((ypos / h)*2.f - 1.f);
+
+        float x = (float)xn/scale;
+        float y = (float)yn/scale;
+
+        demo_cdt_insert(window, x, y);
     }
 }
 
@@ -273,6 +283,8 @@ static void demo_key_callback(GLFWwindow* window, int key, int scancode, int act
 }
 
 static void demo_drop_callback(GLFWwindow *window, int count, const char **paths) {
+    glfwFocusWindow(window);
+
     if (count == 1) {
         // Redo log
         //
@@ -289,6 +301,9 @@ static void demo_drop_callback(GLFWwindow *window, int count, const char **paths
             }
             fprintf(insert_log_file, ";\n");
             offset += n;
+
+            constrains.push_back(next_gen_id);
+            next_gen_id += 1;
         }
     }
 }

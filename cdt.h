@@ -1,192 +1,377 @@
-#ifndef SW_CDT_H_INCLUDE
-#define SW_CDT_H_INCLUDE
-/* ========================================================================
+/* 
+   cdt - v0.1 - Dynamic 2D Constrained Delaunay Triangulation Library
+   Seong Woo Lee 2025
 
-   (C) Copyright 2025 by Seong Woo Lee, All Rights Reserved.
 
-   This software is provided 'as-is', without any express or implied
-   warranty. In no event will the authors be held liable for any damages
-   arising from the use of this software.
+   LICENSE
+       See end of file for license information.
 
-   ======================================================================== */
 
-// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-// @Important: !!!!!!! DO NOT INTERSECT CONSTRAINTS, DEAR USERS !!!!!!!
-// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+   NOTES 
+       Primarily of interest to game developers.
 
-// @Todo: 
-//        [ ] There's a bug in locate_point. Infinite loop.
-//        [ ] Remove STL.
-//        [ ] Remove printfs.
-//        [ ] Remove new/delete.
-//        [ ] Spatial Partitioning?
-//        [ ] Intersecting contraints support.
+
+   LIMITATION
+       Constrained polygons cannot overlap; treat each constraint as a solid obstacle.
+
+
+   USAGE
+       First, initialize your 'cdt_context'.
+
+           void cdt_init(cdt_context *ctx,
+                         cdt_f32 x1, cdt_f32 y1,
+                         cdt_f32 x2, cdt_f32 y2,
+                         cdt_f32 x3, cdt_f32 y3)
+       
+       Provide a pointer to the context along with the three vertices of the 
+       super-triangle in counter-clockwise order. Make sure the super-triangle 
+       fully encloses all points that will be added later.
+
+
+
+       Then, you can insert constraints using the following call:
+
+           void cdt_insert(cdt_context *ctx,
+                           cdt_id id,
+                           cdt_f32 x1, cdt_f32 y1, cdt_f32 x2, cdt_f32 y2)
+       
+       Pass in the initialized context with the ID you wish to assign to the 
+       constraint. Then provide the coordinates of the two endpoints that define 
+       the constrained edge.
+
+
+
+       If you need to remove a constraint later, simply call the following 
+       function and provide the ID of the constraint you want to remove.
+
+           void cdt_remove(cdt_context *ctx, cdt_id id)
+       
+*/
 
 #include <stdlib.h>
 #include <stdint.h>
 
-#include <vector>
-#include <set>
-#include <stack>
-#include <queue>
-#include <list>
-
+typedef float         cdt_f32;
+typedef unsigned int  cdt_id;
 #define cdt_assert(exp) if (!(exp)) {*(volatile int*)0=0;}
-typedef float   float32;
-typedef uint32_t Id;
 
-typedef struct Quad_Edge Quad_Edge;
-
-typedef struct {
-    float32 x, y;
-} Vec2;
+typedef struct cdt_vertex cdt_vertex;
+typedef struct cdt_quad_edge cdt_quad_edge;
+typedef struct cdt_edge cdt_edge;
 
 typedef struct {
-    Vec2 pos;
-    std::list<Quad_Edge *> edges; // A list of quad-edges originating from the vertex.
-} Vertex;
+    cdt_f32 x, y;
+} cdt_vec2;
 
-struct Quad_Edge {
-    Vertex    *org;
-    Vertex    *debug_dst; // @Temporary: 
-    Quad_Edge *onext_ptr;
+typedef struct {
+    cdt_vertex **data;
+    int num;
+    int cap;
+} cdt_vertex_array;
+
+typedef struct {
+    cdt_id *data;
+    int num;
+    int cap;
+} cdt_id_array;
+
+typedef struct {
+    cdt_quad_edge **data;
+    int num;
+    int cap;
+} cdt_quad_edge_array;
+
+typedef struct {
+    cdt_edge **data;
+    int num;
+    int cap;
+} cdt_edge_array;
+
+typedef struct {
+    cdt_quad_edge **data;
+    int front;
+    int back;
+    int cap;
+} cdt_queue;
+
+struct cdt_vertex {
+    cdt_vec2 pos;
+    cdt_quad_edge_array edges; // A list of quad-edges originating from the vertex.
+};
+
+struct cdt_quad_edge {
+    cdt_vertex    *org;
+    //cdt_vertex    *debug_dst;
+    cdt_quad_edge *onext_ptr;
     uint8_t    idx;       // [0,3]
     uint8_t    visited;
 };
 
-typedef struct {
-    Quad_Edge e[4];
-    std::list<Id> ids;
-} Edge;
+struct cdt_edge {
+    cdt_quad_edge e[4];
+    cdt_id_array ids;
+};
 
 typedef struct {
-    std::list<Vertex *> vertices;
-    std::list<Edge *>   edges;
-} Context;
+    cdt_vertex_array vertices;
+    cdt_edge_array   edges;
+} cdt_context;
 
 typedef struct {
     bool        exists;
     bool        on_edge;
-    Vertex     *vertex;
-    Quad_Edge  *edge;
+    cdt_vertex     *vertex;
+    cdt_quad_edge  *edge;
 } Locate_Result;
 
 typedef struct {
-    Vertex *vert;
-    float32 dx;
-    float32 dy;
-} Vertex_Sort_Struct;
+    cdt_vertex *vert;
+    cdt_f32 dx;
+    cdt_f32 dy;
+} cdt_vertex_Sort_Struct;
+
+typedef struct cdt_index_node {
+    int idx;
+    cdt_index_node *next;
+} cdt_index_node;
 
 
+//void cdt_log(cdt_context *ctx) {
+//    FILE *file = fopen("subdivision.log", "wb");
+//    if (file) {
+//        fprintf(file, "\n");
+//        fprintf(file, "segments = [\n");
+//        for (cdt_edge *e : ctx->edges) {
+//            fprintf(file, "    ((%.2f, %.2f), (%.2f, %.2f)),\n", e->e[0].org->pos.x, e->e[0].org->pos.y, e->e[2].org->pos.x, e->e[2].org->pos.y);
+//        }
+//        fprintf(file, "]\n");
+//        fclose(file);
+//    }
+//}
 
-void debug_log(Context *ctx) {
-    FILE *file = fopen("subdivision.log", "wb");
-    if (file) {
-        fprintf(file, "\n");
-        fprintf(file, "segments = [\n");
-        for (Edge *e : ctx->edges) {
-            fprintf(file, "    ((%.2f, %.2f), (%.2f, %.2f)),\n", e->e[0].org->pos.x, e->e[0].org->pos.y, e->e[2].org->pos.x, e->e[2].org->pos.y);
+
+// Helper data structure codes
+//
+void cdt_vertex_array_push(cdt_vertex_array *arr, cdt_vertex *item) {
+    if (arr->cap == 0) {
+        arr->cap = 16;
+        arr->data = (cdt_vertex **)malloc(sizeof(item)*arr->cap);
+    } else if (arr->num >= arr->cap) {
+        arr->cap <<= 1;
+        arr->data = (cdt_vertex **)realloc(arr->data, sizeof(item)*arr->cap);
+    }
+
+    arr->data[arr->num] = item;
+    arr->num += 1;
+}
+
+void cdt_vertex_array_pop(cdt_vertex_array *arr, cdt_vertex *item) {
+    for (int i = 0; i < arr->num; i += 1) {
+        if (arr->data[i] == item) {
+            arr->num -= 1;
+            arr->data[i] = arr->data[arr->num];
+            return;
         }
-        fprintf(file, "]\n");
-        fclose(file);
     }
 }
 
+void cdt_quad_edge_array_push(cdt_quad_edge_array *arr, cdt_quad_edge *item) {
+    if (arr->cap == 0) {
+        arr->cap = 16;
+        arr->data = (cdt_quad_edge **)malloc(sizeof(item)*arr->cap);
+    } else if (arr->num >= arr->cap) {
+        arr->cap <<= 1;
+        arr->data = (cdt_quad_edge **)realloc(arr->data, sizeof(item)*arr->cap);
+    }
 
-// Quad_Edge Algebra
-// 
-Edge *get_edge(Quad_Edge *e) {
-    return (Edge *)(e - e->idx);
+    arr->data[arr->num] = item;
+    arr->num += 1;
 }
 
-Quad_Edge *rot(Quad_Edge *e) {
+void cdt_quad_edge_array_pop(cdt_quad_edge_array *arr, cdt_quad_edge *item) {
+    for (int i = 0; i < arr->num; i += 1) {
+        if (arr->data[i] == item) {
+            arr->num -= 1;
+            arr->data[i] = arr->data[arr->num];
+            return;
+        }
+    }
+}
+
+cdt_quad_edge *cdt_stack_pop(cdt_quad_edge_array *arr) {
+    cdt_quad_edge *result = arr->data[arr->num-1];
+    arr->num -= 1;
+    return result;
+}
+
+void cdt_edge_array_push(cdt_edge_array *arr, cdt_edge *item) {
+    if (arr->cap == 0) {
+        arr->cap = 16;
+        arr->data = (cdt_edge **)malloc(sizeof(item)*arr->cap);
+    } else if (arr->num >= arr->cap) {
+        arr->cap <<= 1;
+        arr->data = (cdt_edge **)realloc(arr->data, sizeof(item)*arr->cap);
+    }
+
+    arr->data[arr->num] = item;
+    arr->num += 1;
+}
+
+void cdt_edge_array_pop(cdt_edge_array *arr, cdt_edge *item) {
+    for (int i = 0; i < arr->num; i += 1) {
+        if (arr->data[i] == item) {
+            arr->num -= 1;
+            arr->data[i] = arr->data[arr->num];
+            return;
+        }
+    }
+}
+
+void cdt_id_array_push(cdt_id_array *arr, cdt_id item) {
+    if (arr->cap == 0) {
+        arr->cap = 16;
+        arr->data = (cdt_id *)malloc(sizeof(item)*arr->cap);
+    } else if (arr->num >= arr->cap) {
+        arr->cap <<= 1;
+        arr->data = (cdt_id *)realloc(arr->data, sizeof(item)*arr->cap);
+    }
+
+    arr->data[arr->num] = item;
+    arr->num += 1;
+}
+
+void cdt_queue_push(cdt_queue *q, cdt_quad_edge *e) {
+    if (q->cap == 0) {
+        q->cap = 32;
+        q->data = (cdt_quad_edge **)malloc(sizeof(cdt_quad_edge *)*q->cap);
+    }
+
+    if ((q->back+1)%q->cap == q->front) {
+        int new_cap = (q->cap << 1);
+        cdt_quad_edge **ptr = (cdt_quad_edge **)malloc(sizeof(cdt_quad_edge *)*new_cap);
+        for (int j = 0, i = q->front; i != q->back; j+=1, i = ((i+1)%q->cap)) {
+            ptr[j] = q->data[i];
+        }
+
+        q->front = 0;
+        q->back  = q->cap;
+        q->cap   = new_cap;
+
+        free(q->data);
+        q->data = ptr;
+    }
+
+    q->data[q->back] = e;
+    q->back = (q->back+1)%q->cap;
+}
+
+cdt_quad_edge *cdt_queue_pop(cdt_queue *q) {
+    cdt_quad_edge *result = q->data[q->front];
+    q->front = ((q->front+1)%q->cap);
+    return result;
+}
+
+bool cdt_queue_empty(cdt_queue *q) {
+    return q->front == q->back;
+}
+
+
+
+// cdt_quad_edge Algebra
+// 
+cdt_edge *cdt_get_edge(cdt_quad_edge *e) {
+    return (cdt_edge *)(e - e->idx);
+}
+
+cdt_quad_edge *cdt_rot(cdt_quad_edge *e) {
     int off[4] = {1,2,3,0};
     return e - e->idx + off[e->idx];
 }
 
-Quad_Edge *inv_rot(Quad_Edge *e) {
+cdt_quad_edge *cdt_inv_rot(cdt_quad_edge *e) {
     int off[4] = {3,0,1,2};
     return e - e->idx + off[e->idx];
 }
 
-Quad_Edge *sym(Quad_Edge *e) {
+cdt_quad_edge *cdt_sym(cdt_quad_edge *e) {
     int off[4] = {2,3,0,1};
     return e - e->idx + off[e->idx];
 }
 
-Vertex *dst(Quad_Edge *e) {
-    return sym(e)->org;
+cdt_vertex *cdt_dst(cdt_quad_edge *e) {
+    return cdt_sym(e)->org;
 }
 
-Quad_Edge *onext(Quad_Edge *e) {
+cdt_quad_edge *cdt_onext(cdt_quad_edge *e) {
     return e->onext_ptr;
 }
 
-Quad_Edge *oprev(Quad_Edge *e) {
-    return rot(onext(rot(e)));
+cdt_quad_edge *cdt_oprev(cdt_quad_edge *e) {
+    return cdt_rot(cdt_onext(cdt_rot(e)));
 }
 
-Quad_Edge *lnext(Quad_Edge *e) {
-    return rot(onext(inv_rot(e)));
+cdt_quad_edge *cdt_lnext(cdt_quad_edge *e) {
+    return cdt_rot(cdt_onext(cdt_inv_rot(e)));
 }
 
-Quad_Edge *lprev(Quad_Edge *e) {
-    return sym(onext(e));
+cdt_quad_edge *cdt_lprev(cdt_quad_edge *e) {
+    return cdt_sym(cdt_onext(e));
 }
 
-Quad_Edge *dnext(Quad_Edge *e) {
-    return sym(onext(sym(e)));
+cdt_quad_edge *cdt_dnext(cdt_quad_edge *e) {
+    return cdt_sym(cdt_onext(cdt_sym(e)));
 }
 
-Quad_Edge *dprev(Quad_Edge *e) {
-    return inv_rot(onext(inv_rot(e)));
+cdt_quad_edge *cdt_dprev(cdt_quad_edge *e) {
+    return cdt_inv_rot(cdt_onext(cdt_inv_rot(e)));
 }
 
-Quad_Edge *rprev(Quad_Edge *e) {
-    return onext(sym(e));
+cdt_quad_edge *cdt_rprev(cdt_quad_edge *e) {
+    return cdt_onext(cdt_sym(e));
 }
 
-bool constrained(Quad_Edge *e) {
-    return !get_edge(e)->ids.empty();
+bool cdt_is_constrained(cdt_quad_edge *e) {
+    return cdt_get_edge(e)->ids.num > 0;
 }
 
-void splice(Quad_Edge *a, Quad_Edge *b) {
-    Quad_Edge *alpha = rot(onext(a));
-    Quad_Edge *beta  = rot(onext(b));
+void cdt_splice(cdt_quad_edge *a, cdt_quad_edge *b) {
+    cdt_quad_edge *alpha = cdt_rot(cdt_onext(a));
+    cdt_quad_edge *beta  = cdt_rot(cdt_onext(b));
 
-    Quad_Edge *b_onext = onext(b);
-    b->onext_ptr = onext(a);
+    cdt_quad_edge *b_onext = cdt_onext(b);
+    b->onext_ptr = cdt_onext(a);
     a->onext_ptr = b_onext;
 
-    Quad_Edge *alpha_onext = onext(alpha);
-    alpha->onext_ptr = onext(beta);
+    cdt_quad_edge *alpha_onext = cdt_onext(alpha);
+    alpha->onext_ptr = cdt_onext(beta);
     beta->onext_ptr  = alpha_onext;
 }
 
-void swap(Quad_Edge *e) {
+void cdt_swap(cdt_quad_edge *e) {
     // Remove original reference from the vertices.
-    e->org->edges.remove(e);
-    dst(e)->edges.remove(sym(e));
+    cdt_quad_edge_array_pop(&e->org->edges, e);
+    cdt_quad_edge_array_pop(&cdt_dst(e)->edges, cdt_sym(e));
  
-    Quad_Edge *a = oprev(e);
-    Quad_Edge *b = oprev(sym(e));
-    splice(e, a);
-    splice(sym(e), b);
-    splice(e, lnext(a));
-    splice(sym(e), lnext(b));
+    cdt_quad_edge *a = cdt_oprev(e);
+    cdt_quad_edge *b = cdt_oprev(cdt_sym(e));
+    cdt_splice(e, a);
+    cdt_splice(cdt_sym(e), b);
+    cdt_splice(e, cdt_lnext(a));
+    cdt_splice(cdt_sym(e), cdt_lnext(b));
 
-    e->org = dst(a);
-    sym(e)->org = dst(b);
+    e->org = cdt_dst(a);
+    cdt_sym(e)->org = cdt_dst(b);
 
     // Add new references.
-    e->org->edges.push_back(e);
-    dst(e)->edges.push_back(sym(e));
+    cdt_quad_edge_array_push(&e->org->edges, e);
+    cdt_quad_edge_array_push(&cdt_dst(e)->edges, cdt_sym(e));
 }
 
-Quad_Edge *create_edge(Context *ctx, Vertex *org, Vertex *dst) {
-    Edge *edge = new Edge;
+cdt_quad_edge *cdt_create_edge(cdt_context *ctx, cdt_vertex *org, cdt_vertex *dst) {
+    cdt_edge *edge = (cdt_edge *)malloc(sizeof(cdt_edge));
+    memset(edge, 0, sizeof(cdt_edge));
 
-    ctx->edges.push_back(edge);
+    cdt_edge_array_push(&ctx->edges, edge);
 
     edge->e[0].idx = 0;
     edge->e[1].idx = 1;
@@ -204,178 +389,172 @@ Quad_Edge *create_edge(Context *ctx, Vertex *org, Vertex *dst) {
     edge->e[0].org = org;
     edge->e[2].org = dst;
 
-    edge->e[0].debug_dst = dst;
-    edge->e[2].debug_dst = org;
+    //edge->e[0].debug_dst = dst;
+    //edge->e[2].debug_dst = org;
 
     // Dual
     edge->e[1].onext_ptr = &(edge->e[3]);
     edge->e[3].onext_ptr = &(edge->e[1]);
 
     // Add reference to the two endpoint vertices.
-    org->edges.push_back(&edge->e[0]);
-    dst->edges.push_back(&edge->e[2]);
+    cdt_quad_edge_array_push(&org->edges, &edge->e[0]);
+    cdt_quad_edge_array_push(&dst->edges, &edge->e[2]);
 
     return edge->e;
 }
 
-void destroy_edge(Context *ctx, Quad_Edge *e) {
+void cdt_destroy_edge(cdt_context *ctx, cdt_quad_edge *e) {
     // Remove reference from the two endpoint vertices.
-    e->org->edges.remove(e);
-    dst(e)->edges.remove(sym(e));
+    cdt_quad_edge_array_pop(&e->org->edges, e);
+    cdt_quad_edge_array_pop(&cdt_dst(e)->edges, cdt_sym(e));
 
-    splice(e, oprev(e));
-    splice(sym(e), oprev(sym(e)));
+    cdt_splice(e, cdt_oprev(e));
+    cdt_splice(cdt_sym(e), cdt_oprev(cdt_sym(e)));
 
-    Edge *edge = get_edge(e);
-    ctx->edges.remove(edge);
+    cdt_edge *edge = cdt_get_edge(e);
+    cdt_edge_array_pop(&ctx->edges, edge);
 
-    delete edge;
+    free(edge);
 }
 
-Quad_Edge *connect(Context *ctx, Quad_Edge *a, Quad_Edge *b) {
-    Quad_Edge *e = create_edge(ctx, dst(a), b->org);
-    splice(e, lnext(a));
-    splice(sym(e), b);
+cdt_quad_edge *cdt_connect(cdt_context *ctx, cdt_quad_edge *a, cdt_quad_edge *b) {
+    cdt_quad_edge *e = cdt_create_edge(ctx, cdt_dst(a), b->org);
+    cdt_splice(e, cdt_lnext(a));
+    cdt_splice(cdt_sym(e), b);
     return e;
 }
 
 
 // Geometry/Math
 //
-float32 orientation(Vec2 a, Vec2 b, Vec2 c) {
+cdt_f32 cdt_orientation(cdt_vec2 a, cdt_vec2 b, cdt_vec2 c) {
     // Returns twice the area of the triangle. Signed if the orientation is clockwise.
     // @Todo: SIMD?
-    float32 x1 = b.x - a.x;
-    float32 y1 = b.y - a.y;
-    float32 x2 = c.x - a.x;
-    float32 y2 = c.y - a.y;
+    cdt_f32 x1 = b.x - a.x;
+    cdt_f32 y1 = b.y - a.y;
+    cdt_f32 x2 = c.x - a.x;
+    cdt_f32 y2 = c.y - a.y;
     return (x1*y2 - x2*y1);
 }
 
-// @Todo: Epsilon allowance?
-bool right_of(Vec2 p, Quad_Edge *e) {
-    return orientation(e->org->pos, dst(e)->pos, p) < 0.f;
+bool cdt_right_of(cdt_vec2 p, cdt_quad_edge *e) {
+    return cdt_orientation(e->org->pos, cdt_dst(e)->pos, p) < 0.f;
 }
 
-bool left_of(Vec2 p, Quad_Edge *e) {
-    return orientation(e->org->pos, dst(e)->pos, p) > 0.f;
+bool cdt_left_of(cdt_vec2 p, cdt_quad_edge *e) {
+    return cdt_orientation(e->org->pos, cdt_dst(e)->pos, p) > 0.f;
 }
 
-bool on_line(Vec2 p, Vec2 org, Vec2 dst) {
-    return orientation(org, dst, p) == 0.f;
+bool cdt_on_line(cdt_vec2 p, cdt_vec2 org, cdt_vec2 dst) {
+    return cdt_orientation(org, dst, p) == 0.f;
 }
 
-bool in_circumcircle(Vec2 p, Vec2 a, Vec2 b, Vec2 c) {
+bool cdt_in_circumcircle(cdt_vec2 p, cdt_vec2 a, cdt_vec2 b, cdt_vec2 c) {
     // @Todo: Better math?
     //        "It is worth to mention that we have faced never-ending loops during 
     //         the flipping process when using only a simple determinant evaluation." -Kallmann
     //
     //        Shewchuck's precise math predicate seems solid.
     //
-    float32 ax = a.x; float32 ay = a.y;
-    float32 bx = b.x; float32 by = b.y;
-    float32 cx = c.x; float32 cy = c.y;
-    float32 px = p.x; float32 py = p.y;
-    float32 ax_ = ax-px;
-    float32 ay_ = ay-py;
-    float32 bx_ = bx-px;
-    float32 by_ = by-py;
-    float32 cx_ = cx-px;
-    float32 cy_ = cy-py;
+    cdt_f32 ax = a.x; cdt_f32 ay = a.y;
+    cdt_f32 bx = b.x; cdt_f32 by = b.y;
+    cdt_f32 cx = c.x; cdt_f32 cy = c.y;
+    cdt_f32 px = p.x; cdt_f32 py = p.y;
+    cdt_f32 ax_ = ax-px;
+    cdt_f32 ay_ = ay-py;
+    cdt_f32 bx_ = bx-px;
+    cdt_f32 by_ = by-py;
+    cdt_f32 cx_ = cx-px;
+    cdt_f32 cy_ = cy-py;
     return ((ax_*ax_ + ay_*ay_) * (bx_*cy_-cx_*by_) -
             (bx_*bx_ + by_*by_) * (ax_*cy_-cx_*ay_) +
             (cx_*cx_ + cy_*cy_) * (ax_*by_-bx_*ay_)) > 0;
 }
 
-bool is_convex(Vec2 a, Vec2 b, Vec2 c, Vec2 d) {
+bool cdt_is_convex(cdt_vec2 a, cdt_vec2 b, cdt_vec2 c, cdt_vec2 d) {
     // @Todo: SIMD?
-    float32 x1 = b.x - a.x;
-    float32 y1 = b.y - a.y;
-    float32 x2 = c.x - b.x;
-    float32 y2 = c.y - b.y;
-    float32 x3 = d.x - c.x;
-    float32 y3 = d.y - c.y;
-    float32 x4 = a.x - d.x;
-    float32 y4 = a.y - d.y;
-    float32 c1 = x1*y2 - x2*y1;
-    float32 c2 = x2*y3 - x3*y2;
-    float32 c3 = x3*y4 - x4*y3;
-    float32 c4 = x4*y1 - x1*y4;
+    cdt_f32 x1 = b.x - a.x;
+    cdt_f32 y1 = b.y - a.y;
+    cdt_f32 x2 = c.x - b.x;
+    cdt_f32 y2 = c.y - b.y;
+    cdt_f32 x3 = d.x - c.x;
+    cdt_f32 y3 = d.y - c.y;
+    cdt_f32 x4 = a.x - d.x;
+    cdt_f32 y4 = a.y - d.y;
+    cdt_f32 c1 = x1*y2 - x2*y1;
+    cdt_f32 c2 = x2*y3 - x3*y2;
+    cdt_f32 c3 = x3*y4 - x4*y3;
+    cdt_f32 c4 = x4*y1 - x1*y4;
 
     return (c1*c2 > 0.f) && (c2*c3 > 0.f) && (c3*c4 > 0.f);
 }
 
 // This is for ear-clipping.
-bool cdt_in_triangle(Vec2 p, Vec2 a, Vec2 b, Vec2 c) {
-    Vec2 ab = {b.x - a.x, b.y - a.y};
-    Vec2 bc = {c.x - b.x, c.y - b.y};
-    Vec2 ca = {a.x - c.x, a.y - c.y};
-    Vec2 ap = {p.x - a.x, p.y - a.y};
-    Vec2 bp = {p.x - b.x, p.y - b.y};
-    Vec2 cp = {p.x - c.x, p.y - c.y};
-    float32 oa = ab.x*ap.y - ab.y*ap.x;
-    float32 ob = bc.x*bp.y - bc.y*bp.x;
-    float32 oc = ca.x*cp.y - ca.y*cp.x;
+bool cdt_in_triangle(cdt_vec2 p, cdt_vec2 a, cdt_vec2 b, cdt_vec2 c) {
+    // @Todo: SIMD?
+    cdt_vec2 ab = {b.x - a.x, b.y - a.y};
+    cdt_vec2 bc = {c.x - b.x, c.y - b.y};
+    cdt_vec2 ca = {a.x - c.x, a.y - c.y};
+    cdt_vec2 ap = {p.x - a.x, p.y - a.y};
+    cdt_vec2 bp = {p.x - b.x, p.y - b.y};
+    cdt_vec2 cp = {p.x - c.x, p.y - c.y};
+    cdt_f32 oa = ab.x*ap.y - ab.y*ap.x;
+    cdt_f32 ob = bc.x*bp.y - bc.y*bp.x;
+    cdt_f32 oc = ca.x*cp.y - ca.y*cp.x;
     // If the point is on the edge of a triangle, we can clip that ear triangle.
     return oa >= 0.f && ob >= 0.f && oc >= 0.f; 
 }
 
-Vertex *create_vertex(Context *ctx, Vec2 pos) {
-    Vertex *result = new Vertex;
+cdt_vertex *cdt_create_vertex(cdt_context *ctx, cdt_vec2 pos) {
+    cdt_vertex *result = (cdt_vertex *)malloc(sizeof(cdt_vertex));
+    memset(result, 0, sizeof(cdt_vertex));
     result->pos = pos;
-    ctx->vertices.push_back(result);
+    cdt_vertex_array_push(&ctx->vertices, result);
     return result;
 }
 
-void flip_until_stack_is_empty(std::stack<Quad_Edge *> &stk) {
+void cdt_flip_until_stack_is_empty(cdt_quad_edge_array *stk) {
     // Flip
-    while (!stk.empty()) {
-        Quad_Edge *e = stk.top();
-        stk.pop();
+    while (stk->num != 0) {
+        cdt_quad_edge *e = cdt_stack_pop(stk);
 
         // @Robustness
-        if (!constrained(e)) {
-            if (in_circumcircle(dprev(e)->org->pos, dst(e)->pos, e->org->pos, dnext(e)->org->pos)) {
-                swap(e);
-                stk.push(lnext(e));
-                stk.push(dnext(e));
+        if (!cdt_is_constrained(e)) {
+            if (cdt_in_circumcircle(cdt_dprev(e)->org->pos, cdt_dst(e)->pos, e->org->pos, cdt_dnext(e)->org->pos)) {
+                cdt_swap(e);
+                cdt_quad_edge_array_push(stk, cdt_lnext(e));
+                cdt_quad_edge_array_push(stk, cdt_dnext(e));
             }
         }
     }
 }
 
-
-typedef struct Index_Node {
-    uint32_t idx;
-    Index_Node *next;
-} Index_Node;
-
-void cdt_ear_triangulate_simple_polygon(Context *ctx, int num_verts, Vertex_Sort_Struct *verts) {
-    std::stack<Quad_Edge *>new_edges;
+void cdt_ear_triangulate_simple_polygon(cdt_context *ctx, int num_verts, cdt_vertex_Sort_Struct *verts) {
+    cdt_quad_edge_array new_edges = {0};
 
     // Preprocessing..
     int num = num_verts;
-    Index_Node *nodes = (Index_Node *)malloc(sizeof(Index_Node)*num);
+    cdt_index_node *nodes = (cdt_index_node *)malloc(sizeof(cdt_index_node)*num);
     for (int i = 0; i < num; ++i) {
         nodes[i].next = &nodes[(i+1)%num];
         nodes[i].idx  = i;
     }
-    Index_Node *node_first = &nodes[0];
+    cdt_index_node *node_first = &nodes[0];
 
     while (num > 3) {
-        Index_Node *left_of_tip = 0;
+        cdt_index_node *cdt_left_of_tip = 0;
         for (int ii = 0; ii < num; ++ii) {
-            Index_Node *node_lft = node_first;
+            cdt_index_node *node_lft = node_first;
             for (int i = 0; i < ii; ++i) { node_lft = node_lft->next; }
-            Index_Node *node_tip = node_lft->next;
-            Index_Node *node_rgt = node_tip->next;
+            cdt_index_node *node_tip = node_lft->next;
+            cdt_index_node *node_rgt = node_tip->next;
 
             int idx0 = node_lft->idx;
             int idx1 = node_tip->idx;
             int idx2 = node_rgt->idx;
 
-            Vec2 p[3] = { verts[idx0].vert->pos, verts[idx1].vert->pos, verts[idx2].vert->pos };
-            Vec2 e[2] = { 
+            cdt_vec2 p[3] = { verts[idx0].vert->pos, verts[idx1].vert->pos, verts[idx2].vert->pos };
+            cdt_vec2 e[2] = { 
                 { p[1].x - p[0].x, p[1].y - p[0].y },
                 { p[2].x - p[0].x, p[2].y - p[0].y },
             };
@@ -383,131 +562,127 @@ void cdt_ear_triangulate_simple_polygon(Context *ctx, int num_verts, Vertex_Sort
             bool is_ear = 1;
             float orientation = e[0].x*e[1].y - e[0].y*e[1].x;
             if (orientation > 0.f) {
-                for (Index_Node *node = node_rgt->next; node != node_lft; node = node->next) {
-                    Vec2 v = verts[node->idx].vert->pos;
+                for (cdt_index_node *node = node_rgt->next; node != node_lft; node = node->next) {
+                    cdt_vec2 v = verts[node->idx].vert->pos;
                     if (cdt_in_triangle(v, p[0], p[1], p[2])) { // This isn't an ear.
                         is_ear = 0;
                         break;
                     }
                 }
-            } else if (orientation < 0.f) {
-                continue;
             } else {
-                assert(!"Three sequentional points are collinear. This is not handled atm.");
+                continue; // @Note: Am I just ignoring collinear points?
             }
 
             if (is_ear) {
-                left_of_tip = node_lft;
+                cdt_left_of_tip = node_lft;
                 goto ear_found;
             }
         }
-        assert(!"Couldn't find an ear. Sad.");
+        cdt_assert(!"Couldn't find an ear. Sad.");
 
 ear_found:
-        Index_Node *tip = left_of_tip->next;
-        int l = left_of_tip->idx;
+        cdt_index_node *tip = cdt_left_of_tip->next;
+        int l = cdt_left_of_tip->idx;
         int r = tip->next->idx;
-        Vertex *vert_tip = verts[tip->idx].vert;
-        Vertex *vert_lft = verts[l].vert;
-        Vertex *vert_rgt = verts[r].vert;
+        cdt_vertex *vert_tip = verts[tip->idx].vert;
+        cdt_vertex *vert_lft = verts[l].vert;
+        cdt_vertex *vert_rgt = verts[r].vert;
 
-        Quad_Edge *right_edge_in_face = 0;
-        Quad_Edge *left_edge_in_face  = 0;
-        for (Quad_Edge *e : vert_tip->edges) {
-            if (dst(e) == vert_lft) {  left_edge_in_face = sym(e); }
-            if (dst(e) == vert_rgt) { right_edge_in_face = e; }
+        cdt_quad_edge *right_edge_in_face = 0;
+        cdt_quad_edge *left_edge_in_face  = 0;
+
+        for (int i = 0; i < vert_tip->edges.num; i+=1) {
+            cdt_quad_edge *e = vert_tip->edges.data[i];
+            if (cdt_dst(e) == vert_lft) {  left_edge_in_face = cdt_sym(e); }
+            if (cdt_dst(e) == vert_rgt) { right_edge_in_face = e; }
         }
+
         cdt_assert(left_edge_in_face);
         cdt_assert(right_edge_in_face);
-        Quad_Edge *new_edge = connect(ctx, right_edge_in_face, left_edge_in_face);
-        new_edges.push(new_edge);
+        cdt_quad_edge *new_edge = cdt_connect(ctx, right_edge_in_face, left_edge_in_face);
+        cdt_quad_edge_array_push(&new_edges, new_edge);
 
         // clip the ear triangle.
         if (node_first == tip) {
             node_first = node_first->next;
         }
-        left_of_tip->next = tip->next;
+        cdt_left_of_tip->next = tip->next;
         --num;
     }
 
-    flip_until_stack_is_empty(new_edges);
+    cdt_flip_until_stack_is_empty(&new_edges);
 
     free(nodes);
+    free(new_edges.data);
 }
 
 // @Robustness:
 int cdt_vert_ccw_cmp(const void *vert1, const void *vert2) {
-    Vertex_Sort_Struct *va = (Vertex_Sort_Struct *)vert1;
-    Vertex_Sort_Struct *vb = (Vertex_Sort_Struct *)vert2;
-    Vec2 a = va->vert->pos;
-    Vec2 b = vb->vert->pos;
-    float32 adx = va->dx;
-    float32 ady = va->dy;
-    float32 bdx = vb->dx;
-    float32 bdy = vb->dy;
+    cdt_vertex_Sort_Struct *va = (cdt_vertex_Sort_Struct *)vert1;
+    cdt_vertex_Sort_Struct *vb = (cdt_vertex_Sort_Struct *)vert2;
+    cdt_vec2 a = va->vert->pos;
+    cdt_vec2 b = vb->vert->pos;
+    cdt_f32 ax = va->dx;
+    cdt_f32 ay = va->dy;
+    cdt_f32 bx = vb->dx;
+    cdt_f32 by = vb->dy;
 
-    if (adx >= 0.f && bdx  < 0.f) { return -1; }
-    if (adx  < 0.f && bdx >= 0.f) { return 11; }
-    if (adx == 0.f && bdx == 0.f) {
-        if (ady >= 0.f || bdy >= 0.f) {
-            if (a.y > b.y) { return -1; }
-            return  1;
-        }
-        if (b.y > a.y) { return -1; }
-        return  1;
+    // @Todo: Is atan bad?
+    cdt_f32 angle_a = atan2f(ay, ax);
+    cdt_f32 angle_b = atan2f(by, bx);
+
+    if (angle_a != angle_b) {
+        return angle_a < angle_b ? -1 : 1;
     }
 
-    float32 det = adx*bdy - bdx*ady;
-    if (det < 0.f) { return 1; }
-    return -1;
+    cdt_f32 dist_a = ax * ax + ay * ay;
+    cdt_f32 dist_b = bx * bx + by * by;
+
+    if (dist_a != dist_b) {
+        return dist_a < dist_b ? -1 : 1;
+    }
+
+    return 0;
 }
 
-void destroy_vertex(Context *ctx, Vertex *vert) {
-    std::vector<Quad_Edge *> edges_to_destroy;
+void cdt_destroy_vertex(cdt_context *ctx, cdt_vertex *vert) {
+    // Get list of edges to destroy.
     int num_edges = 0;
-    for (Quad_Edge *e : vert->edges) {
-        edges_to_destroy.push_back(e);
+    for (int i = 0; i < vert->edges.num; i+=1) {
         num_edges += 1;
     }
 
-    std::vector<Vertex_Sort_Struct> verts(num_edges);
-    for (int i = 0; i < num_edges; i += 1) {
-        Quad_Edge *e = edges_to_destroy[i];
-        verts[i].vert = dst(e);
-        verts[i].dx   = dst(e)->pos.x - vert->pos.x; 
-        verts[i].dy   = dst(e)->pos.y - vert->pos.y; 
-        destroy_edge(ctx, e);
+    cdt_quad_edge **edges_to_destroy = (cdt_quad_edge **)malloc(sizeof(cdt_quad_edge *)*num_edges);
+    for (int i = 0; i < vert->edges.num; i+=1) {
+        edges_to_destroy[i] = vert->edges.data[i];
     }
 
+    // Angular sort outline vertices ccw.
+    cdt_vertex_Sort_Struct *outline = (cdt_vertex_Sort_Struct *)malloc(sizeof(cdt_vertex_Sort_Struct)*num_edges);
+    for (int i = 0; i < num_edges; i += 1) {
+        cdt_quad_edge *e = edges_to_destroy[i];
+        outline[i].vert = cdt_dst(e);
+        outline[i].dx   = cdt_dst(e)->pos.x - vert->pos.x; 
+        outline[i].dy   = cdt_dst(e)->pos.y - vert->pos.y; 
+        cdt_destroy_edge(ctx, e);
+    }
+    qsort(outline, num_edges, sizeof(outline[0]), cdt_vert_ccw_cmp);
+
     // Retriangulate the hole created from vertex removal.
-    qsort(verts.data(), verts.size(), sizeof(verts[0]), cdt_vert_ccw_cmp);
-    cdt_ear_triangulate_simple_polygon(ctx, (int)verts.size(), verts.data());
+    for (int i = 0; i < num_edges; ++i) {
+        cdt_vec2 pos = outline[i].vert->pos;
+        //printf("  (%.2f, %.2f)\n", pos.x, pos.y);
+    }
+    cdt_ear_triangulate_simple_polygon(ctx, num_edges, outline);
 
-    delete vert;
+    // Cleanup
+    cdt_vertex_array_pop(&ctx->vertices, vert);
+    free(outline);
+    free(edges_to_destroy);
+    free(vert);
 }
 
-// Actual heavy liftings.
-//
-void cdt_init(Context *ctx, float32 x1, float32 y1, float32 x2, float32 y2, float32 x3, float32 y3) {
-    // @Todo: Support CW?
-    Vec2 a = Vec2{x1, y1};
-    Vec2 b = Vec2{x2, y2};
-    Vec2 c = Vec2{x3, y3};
-
-    Vertex *va = create_vertex(ctx, a);
-    Vertex *vb = create_vertex(ctx, b);
-    Vertex *vc = create_vertex(ctx, c);
-
-    Quad_Edge *ab = create_edge(ctx, va, vb);
-    Quad_Edge *bc = create_edge(ctx, vb, vc);
-    Quad_Edge *ca = create_edge(ctx, vc, va);
-
-    splice(sym(ab), bc);
-    splice(sym(bc), ca);
-    splice(sym(ca), ab);
-}
-
-Locate_Result locate_point(Context *ctx, Vec2 target) {
+Locate_Result cdt_locate_point(cdt_context *ctx, cdt_vec2 target) {
     // @Todo: Better strategy for locating the point. 'Jump and Walk' is one 
     //        way to go. Should I implement spatial partitioning in here?
     //
@@ -518,112 +693,107 @@ Locate_Result locate_point(Context *ctx, Vec2 target) {
     //        it onto the edge.
     //
     Locate_Result result = {0};
-    Quad_Edge *begin_edge = &ctx->edges.front()->e[0];
+    cdt_quad_edge *begin_edge = &ctx->edges.data[0]->e[0];
 
-    // @Temporary:
-    std::vector<Quad_Edge *> visited_edges;
+    for (cdt_quad_edge *e1 = begin_edge;;) {
+        cdt_quad_edge *e2 = cdt_lnext(e1);
+        cdt_quad_edge *e3 = cdt_lnext(e2);
+        cdt_vertex *v[3] = { e1->org, e2->org, e3->org };
+        cdt_vec2 p[3] = { v[0]->pos, v[1]->pos, v[2]->pos };
 
-    for (Quad_Edge *base = begin_edge, *next = 0;; base = next) {
-        // Check whether the "target" lies on one of the current triangle's 
-        // vertices or one of its edges.
-        //
-        for (Quad_Edge *e = base;;) {
-            if ((e->org->pos.x == target.x) && (e->org->pos.y == target.y)) {
-                result.exists  = 1;
-                result.vertex  = e->org;
-                goto search_cleanup;
-            } else if ((dst(e)->pos.x == target.x) && (dst(e)->pos.y == target.y)) {
-                result.exists  = 1;
-                result.vertex  = dst(e);
-                goto search_cleanup;
-            } else if (on_line(target, e->org->pos, dst(e)->pos)) {
-                result.on_edge = 1;
-                result.edge = e;
-                goto search_cleanup;
+        cdt_quad_edge *e[3] = { e1, e2, e3 };
+
+        // If one of its points is identical to my target, end iteration.
+        for (int i = 0; i < 3; i+=1) {
+            if (p[i].x == target.x && p[i].y == target.y) {
+                result.exists = 1;
+                result.vertex = v[i];
+                return result;
             }
-            e = lnext(e);
-            if (e == base) { break; }
         }
 
-        // Oriented walk.
-        Quad_Edge *side = base;
-        do {
-            next = sym(side);
-            if (!next->visited && left_of(target, next)) {
-                goto next_edge_found;
+        // In triangle?
+        if (cdt_left_of(target,e1) && cdt_left_of(target,e2) && cdt_left_of(target,e3)) {
+            result.edge = e1;
+            return result;
+        }
+
+        // If not, find next edge to pass through.
+        cdt_quad_edge *next = 0;
+        for (int i = 0; i < 3; i+=1) {
+            int j = (i+1)%3;
+            if (cdt_left_of(cdt_dst(e[j])->pos, e[i]) && cdt_right_of(target, e[i])) {
+                next = cdt_sym(e[i]);
+                break;
             }
-            side = lnext(side);
-        } while (side != base);
+        }
 
-        // @Todo: Epsilon-based testing? I'm just assuming the vertex is in the 
-        //        face if I've reached here.
-        result.edge = base;
-        goto search_cleanup;
-
-next_edge_found: // @Cleanup
-        next->visited = 1;
-        visited_edges.push_back(next);
+        // If not found, the point is on an edge.
+        if (next == 0) {
+            for (int i = 0; i < 3; i+=1) {
+                if (cdt_on_line(target, e[i]->org->pos, cdt_dst(e[i])->pos)) {
+                    result.on_edge = 1;
+                    result.edge    = e[i];
+                    return result;
+                }
+            }
+        } else {
+            e1 = next;
+        }
     }
-
-search_cleanup:
-    // Clear visited mark.
-    for (Quad_Edge *e : visited_edges) {
-        e->visited = 0;
-    }
-
-    return result;
 }
 
-Vertex *insert_point(Context *ctx, Vec2 pos) {
-    Locate_Result locate = locate_point(ctx, pos); // @Todo: I should just inline it.
+cdt_vertex *cdt_insert_point(cdt_context *ctx, cdt_vec2 pos) {
+    Locate_Result locate = cdt_locate_point(ctx, pos); // @Todo: I should just inline it.
 
     if (locate.exists) {
         return locate.vertex;
     }
 
-    Vertex *new_vertex = create_vertex(ctx, pos);
+    cdt_vertex *new_vertex = cdt_create_vertex(ctx, pos);
 
-    Quad_Edge *start_side = locate.edge;
+    cdt_quad_edge *start_side = locate.edge;
     if (locate.on_edge) {
         // @Todo: According to Kallmann, I have to project the point to the edge, 
         //        but I assume it is for the epsilon-tested on-edge case. Currently, I am 
         //        defining 'point-on-edge' as a case if the determinant is 0. So, 
         //        I don't have to bother atm?
-        start_side = oprev(start_side);
-        destroy_edge(ctx, onext(start_side));
+        start_side = cdt_oprev(start_side);
+        cdt_destroy_edge(ctx, cdt_onext(start_side));
     }
 
     // Subdivide quadrilateral/triangle.
     {
-        Quad_Edge *diagonal = create_edge(ctx, start_side->org, new_vertex);
-        splice(start_side, diagonal);
-        Quad_Edge *start = diagonal;
-        Quad_Edge *side = start_side;
+        cdt_quad_edge *diagonal = cdt_create_edge(ctx, start_side->org, new_vertex);
+        cdt_splice(start_side, diagonal);
+        cdt_quad_edge *start = diagonal;
+        cdt_quad_edge *side = start_side;
         do {
-            diagonal = connect(ctx, side, sym(diagonal));
-            side = oprev(diagonal);
-        } while (lnext(side) != start);
+            diagonal = cdt_connect(ctx, side, cdt_sym(diagonal));
+            side = cdt_oprev(diagonal);
+        } while (cdt_lnext(side) != start);
     }
 
     {
         // Push initial potentially flippable edges to stack.
-        std::stack<Quad_Edge *> check_stack;
-        Quad_Edge *side = start_side;
+        cdt_quad_edge_array check_stack = {0};
+        cdt_quad_edge *side = start_side;
         do {
-            check_stack.push(side);
-            side = oprev(lnext(side));
+            cdt_quad_edge_array_push(&check_stack, side);
+            side = cdt_oprev(cdt_lnext(side));
         } while (side != start_side);
 
-        flip_until_stack_is_empty(check_stack);
+        cdt_flip_until_stack_is_empty(&check_stack);
+        free(check_stack.data);
     }
 
 
     return new_vertex;
 }
 
-void insert_segment(Context *ctx, Id id, Vertex *vert1, Vertex *vert2) {
-    Vec2 p = vert1->pos;
-    Vec2 q = vert2->pos;
+void cdt_insert_segment(cdt_context *ctx, cdt_id id, cdt_vertex *vert1, cdt_vertex *vert2) {
+    cdt_vec2 p = vert1->pos;
+    cdt_vec2 q = vert2->pos;
 
     // Gather intersecting edges.
     //
@@ -653,41 +823,41 @@ void insert_segment(Context *ctx, Id id, Vertex *vert1, Vertex *vert2) {
     //
 
 
-    std::queue<Quad_Edge *> intersectings;
+    cdt_queue intersectings = {0};
 
-    Vertex *pivot = vert1;
-    Quad_Edge *r = pivot->edges.front();
-    Quad_Edge *l = onext(r);
+    cdt_vertex *pivot = vert1;
+    cdt_quad_edge *r = pivot->edges.data[0];
+    cdt_quad_edge *l = cdt_onext(r);
     while (pivot != vert2) {
-        if (orientation(dst(r)->pos, p,q) < 0.f) { // right
-            while (orientation(dst(l)->pos, p,q) < 0.f) { // right
+        if (cdt_orientation(cdt_dst(r)->pos, p,q) < 0.f) { // right
+            while (cdt_orientation(cdt_dst(l)->pos, p,q) < 0.f) { // right
                 r = l;
-                l = onext(l);
+                l = cdt_onext(l);
             }
         } else { // left or on-line
             do {
                 l = r;
-                r = oprev(r);
-            } while (orientation(dst(r)->pos, p,q) >= 0.f);
+                r = cdt_oprev(r);
+            } while (cdt_orientation(cdt_dst(r)->pos, p,q) >= 0.f);
         }
 
-        if (orientation(dst(l)->pos, p,q) == 0.f) { // l is on-line
-            l = sym(dnext(l));
-            r = lprev(r);
+        if (cdt_orientation(cdt_dst(l)->pos, p,q) == 0.f) { // l is on-line
+            l = cdt_sym(cdt_dnext(l));
+            r = cdt_lprev(r);
             pivot = l->org;
         } else {
             for (;;) {
-                intersectings.push(lnext(r));
-                Vertex *s = dnext(dnext(l))->org;
-                if (orientation(s->pos, p,q) < 0.f) { // right
-                    l = dnext(l);
-                    r = oprev(l);
-                } else if (orientation(s->pos, p,q) > 0.f) { // left
-                    r = dprev(r);
-                    l = onext(r);
+                cdt_queue_push(&intersectings, cdt_lnext(r));
+                cdt_vertex *s = cdt_dnext(cdt_dnext(l))->org;
+                if (cdt_orientation(s->pos, p,q) < 0.f) { // right
+                    l = cdt_dnext(l);
+                    r = cdt_oprev(l);
+                } else if (cdt_orientation(s->pos, p,q) > 0.f) { // left
+                    r = cdt_dprev(r);
+                    l = cdt_onext(r);
                 } else { // on-line
-                    r = dnext(dnext(l));
-                    l = onext(r);
+                    r = cdt_dnext(cdt_dnext(l));
+                    l = cdt_onext(r);
                     pivot = s;
                     break;
                 }
@@ -700,48 +870,48 @@ void insert_segment(Context *ctx, Id id, Vertex *vert1, Vertex *vert2) {
     // The input consists of the collected intersecting edges.
     // Using this input, we will perform the required edge flips.
     //
-    std::stack<Quad_Edge *> flip_stack;
-    while (!intersectings.empty()) {
-        Quad_Edge *e = intersectings.front();
-        intersectings.pop();
+    cdt_quad_edge_array flip_stack = {0};
+    while (!cdt_queue_empty(&intersectings)) {
+        cdt_quad_edge *e = cdt_queue_pop(&intersectings);
 
         // @Fix: Infinite loop + Strictness
-        Vec2 a = e->org->pos;
-        Vec2 b = dst(oprev(e))->pos;
-        Vec2 c = dst(e)->pos;
-        Vec2 d = lprev(e)->org->pos;
+        cdt_vec2 a = e->org->pos;
+        cdt_vec2 b = cdt_dst(cdt_oprev(e))->pos;
+        cdt_vec2 c = cdt_dst(e)->pos;
+        cdt_vec2 d = cdt_lprev(e)->org->pos;
 
-        // @Temporary
-        if (constrained(e)) {
-            cdt_assert(!"I think you have intersecting constrained edgse. It is not covered atm. Sorry!");
+        // @Temporary:
+        if (cdt_is_constrained(e)) {
+            cdt_assert(!"Intersecting constrains isn't allowed. Why would you do that? It is not covered atm. Sorry!");
         }
 
-        if (is_convex(a, b, c, d)) {
-            swap(e);
-            if (orientation(e->org->pos, p,q)*orientation(dst(e)->pos, p,q) < 0.f) {
-                intersectings.push(e);
+        if (cdt_is_convex(a, b, c, d)) {
+            cdt_swap(e);
+            if (cdt_orientation(e->org->pos, p,q)*cdt_orientation(cdt_dst(e)->pos, p,q) < 0.f) {
+                cdt_queue_push(&intersectings, e);
             } else {
-                flip_stack.push(e);
+                cdt_quad_edge_array_push(&flip_stack, e);
             }
         } else {
-            intersectings.push(e);
+            cdt_queue_push(&intersectings, e);
         }
     }
 
     // Assign an ID to the edges that lie on the constrained edge by walking 
     // from the start vetex to the end vertex.
-    for (Vertex *cur = vert1, *nxt = 0;;cur = nxt) {
+    for (cdt_vertex *cur = vert1, *nxt = 0;;cur = nxt) {
         if (cur == vert2) { break; }
 
-        for (Quad_Edge *e : cur->edges) {
-            nxt = dst(e);
-            if (orientation(nxt->pos, p,q) == 0.f) {
-                float32 x1 = q.x - cur->pos.x;
-                float32 y1 = q.y - cur->pos.y;
-                float32 x2 = nxt->pos.x - cur->pos.x;
-                float32 y2 = nxt->pos.y - cur->pos.y;
+        for (int i = 0; i < cur->edges.num; i+=1) {
+            cdt_quad_edge *e = cur->edges.data[i];
+            nxt = cdt_dst(e);
+            if (cdt_orientation(nxt->pos, p,q) == 0.f) {
+                cdt_f32 x1 = q.x - cur->pos.x;
+                cdt_f32 y1 = q.y - cur->pos.y;
+                cdt_f32 x2 = nxt->pos.x - cur->pos.x;
+                cdt_f32 y2 = nxt->pos.y - cur->pos.y;
                 if (x1*x2 + y1*y2 > 0.f) {
-                    get_edge(e)->ids.push_back(id);
+                    cdt_id_array_push(&cdt_get_edge(e)->ids, id);
                     break;
                 }
             }
@@ -751,46 +921,131 @@ void insert_segment(Context *ctx, Id id, Vertex *vert1, Vertex *vert2) {
     // Now that all relevant edges have been marked as constrained, it's safe to 
     // perform edge flips, since constrained edges will be skipped.
     //
-    flip_until_stack_is_empty(flip_stack);
+    cdt_flip_until_stack_is_empty(&flip_stack);
+    free(flip_stack.data);
+    free(intersectings.data);
 }
 
-void cdt_insert(Context *ctx, Id id, float32 x1, float32 y1, float32 x2, float32 y2) {
-    Vec2 p1;
+//
+// APIs
+//
+void cdt_init(cdt_context *ctx, cdt_f32 x1, cdt_f32 y1, cdt_f32 x2, cdt_f32 y2, cdt_f32 x3, cdt_f32 y3) {
+    memset(ctx, 0, sizeof(cdt_context));
+
+    // @Todo: Support CW?
+    cdt_vec2 a = cdt_vec2{x1, y1};
+    cdt_vec2 b = cdt_vec2{x2, y2};
+    cdt_vec2 c = cdt_vec2{x3, y3};
+
+    cdt_vertex *va = cdt_create_vertex(ctx, a);
+    cdt_vertex *vb = cdt_create_vertex(ctx, b);
+    cdt_vertex *vc = cdt_create_vertex(ctx, c);
+
+    cdt_quad_edge *ab = cdt_create_edge(ctx, va, vb);
+    cdt_quad_edge *bc = cdt_create_edge(ctx, vb, vc);
+    cdt_quad_edge *ca = cdt_create_edge(ctx, vc, va);
+
+    cdt_splice(cdt_sym(ab), bc);
+    cdt_splice(cdt_sym(bc), ca);
+    cdt_splice(cdt_sym(ca), ab);
+}
+
+void cdt_insert(cdt_context *ctx, cdt_id id, cdt_f32 x1, cdt_f32 y1, cdt_f32 x2, cdt_f32 y2) {
+    cdt_vec2 p1;
     p1.x = x1;
     p1.y = y1;
-    Vertex *vtx1 = insert_point(ctx, p1);
+    cdt_vertex *vtx1 = cdt_insert_point(ctx, p1);
 
-    Vec2 p2;
+    cdt_vec2 p2;
     p2.x = x2;
     p2.y = y2;
-    Vertex *vtx2 = insert_point(ctx, p2);
+    cdt_vertex *vtx2 = cdt_insert_point(ctx, p2);
 
-    insert_segment(ctx, id, vtx1, vtx2);
+    cdt_insert_segment(ctx, id, vtx1, vtx2);
 }
 
-void cdt_remove(Context *ctx, Id id) {
-    std::set<Vertex *> vertices;
+void cdt_remove(cdt_context *ctx, cdt_id id) {
+    // @Note: Since the pointer is a key, it is not deterministic. That is, 
+    //        it's hard to reproduce the bug.
+    cdt_vertex_array vertices = {0};
 
-    for (Edge *e : ctx->edges) {
-        if (find(e->ids.begin(), e->ids.end(), id) != e->ids.end()) {
-            e->ids.remove(id);
-            vertices.insert(e->e[0].org);
-            vertices.insert(e->e[2].org);
+    // Get a set of vertices to check. Yes, it is a stupid linear array.
+    for (int i = 0; i < ctx->edges.num; i+=1) {
+        cdt_edge *e = ctx->edges.data[i];
+        cdt_id_array *ids = &e->ids;
+        for (int i = 0; i < ids->num; i+=1) {
+            if (ids->data[i] == id) {
+                ids->num-=1;
+                ids->data[i] = ids->data[ids->num];
+                   
+                bool is_in1 = 0;
+                bool is_in2 = 0;
+                for (int i = 0; i < vertices.num; i+=1) {
+                    if (vertices.data[i] == e->e[0].org) { is_in1 = 1; }
+                    if (vertices.data[i] == e->e[2].org) { is_in2 = 1; }
+                }
+                if (!is_in1) { cdt_vertex_array_push(&vertices, e->e[0].org); }
+                if (!is_in2) { cdt_vertex_array_push(&vertices, e->e[2].org); }
+
+                break;
+            }
         }
     }
 
-    for (Vertex *v : vertices) {
+    for (int i = 0; i < vertices.num; i+=1) {
+        cdt_vertex *v = vertices.data[i];
         int should_destroy = 1;
-        for (Quad_Edge *e : v->edges) {
-            if (constrained(e)) {
+        for (int i = 0; i < v->edges.num; i+=1) {
+            cdt_quad_edge *e = v->edges.data[i];
+            if (cdt_is_constrained(e)) {
                 should_destroy = 0;
                 break;
             }
         }
-        if (should_destroy) { destroy_vertex(ctx, v); }
-
+        if (should_destroy) { cdt_destroy_vertex(ctx, v); }
     }
+
+    free(vertices.data);
 }
 
-
-#endif // SW_CDT_H_INCLUDE
+/*
+------------------------------------------------------------------------------
+This software is available under 2 licenses -- choose whichever you prefer.
+------------------------------------------------------------------------------
+ALTERNATIVE A - MIT License
+Copyright (c) 2025 Seong Woo Lee
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+------------------------------------------------------------------------------
+ALTERNATIVE B - Public Domain (www.unlicense.org)
+This is free and unencumbered software released into the public domain.
+Anyone is free to copy, modify, publish, use, compile, sell, or distribute this
+software, either in source code form or as a compiled binary, for any purpose,
+commercial or non-commercial, and by any means.
+In jurisdictions that recognize copyright laws, the author or authors of this
+software dedicate any and all copyright interest in the software to the public
+domain. We make this dedication for the benefit of the public at large and to
+the detriment of our heirs and successors. We intend this dedication to be an
+overt act of relinquishment in perpetuity of all present and future rights to
+this software under copyright law.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+------------------------------------------------------------------------------
+*/
