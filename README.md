@@ -1,3 +1,3 @@
 # CDT
 
-**CDT** is a stb-style single-header 2D incremental Constrained Delaunay Triangulation library written in C.
+**CDT** is a single-header, stb-style C library for  incremental 2D Constrained Delaunay Triangulation, built with game development in mind.
