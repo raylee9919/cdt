@@ -68,4 +68,3 @@ Parse_Result float_array_from_log_file(const char *path) {
 
     return result;
 }
-

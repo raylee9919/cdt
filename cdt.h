@@ -48,8 +48,9 @@
        
 */
 
-#include <stdlib.h>
 #include <stdint.h>
+#include <math.h>
+#include <string.h>
 
 typedef float         cdt_f32;
 typedef unsigned int  cdt_id;
@@ -121,8 +122,8 @@ typedef struct {
 } cdt_context;
 
 typedef struct {
-    bool exists;
-    bool on_edge;
+    int exists;
+    int on_edge;
     cdt_vertex *vertex;
     cdt_quad_edge *edge;
 } cdt_locate_result;
@@ -133,10 +134,11 @@ typedef struct {
     cdt_f32 dy;
 } cdt_vertex_Sort_Struct;
 
-typedef struct cdt_index_node {
+typedef struct cdt_index_node cdt_index_node;
+struct cdt_index_node {
     int idx;
     cdt_index_node *next;
-} cdt_index_node;
+};
 
 
 void cdt_init(cdt_context *ctx, cdt_f32 x1, cdt_f32 y1, cdt_f32 x2, cdt_f32 y2, cdt_f32 x3, cdt_f32 y3);
@@ -285,7 +287,7 @@ cdt_quad_edge *cdt_queue_pop(cdt_queue *q) {
     return result;
 }
 
-bool cdt_queue_empty(cdt_queue *q) {
+int cdt_queue_empty(cdt_queue *q) {
     return q->front == q->back;
 }
 
@@ -429,7 +431,7 @@ cdt_quad_edge *cdt_connect(cdt_context *ctx, cdt_quad_edge *a, cdt_quad_edge *b)
     return e;
 }
 
-bool cdt_is_constrained(cdt_quad_edge *e) {
+int cdt_is_constrained(cdt_quad_edge *e) {
     return cdt_get_edge(e)->ids.num > 0;
 }
 
@@ -446,19 +448,19 @@ cdt_f32 cdt_orientation(cdt_vec2 a, cdt_vec2 b, cdt_vec2 c) {
     return (x1*y2 - x2*y1);
 }
 
-bool cdt_right_of(cdt_vec2 p, cdt_quad_edge *e) {
+int cdt_right_of(cdt_vec2 p, cdt_quad_edge *e) {
     return cdt_orientation(e->org->pos, cdt_dst(e)->pos, p) < 0.f;
 }
 
-bool cdt_left_of(cdt_vec2 p, cdt_quad_edge *e) {
+int cdt_left_of(cdt_vec2 p, cdt_quad_edge *e) {
     return cdt_orientation(e->org->pos, cdt_dst(e)->pos, p) > 0.f;
 }
 
-bool cdt_on_line(cdt_vec2 p, cdt_vec2 org, cdt_vec2 dst) {
+int cdt_on_line(cdt_vec2 p, cdt_vec2 org, cdt_vec2 dst) {
     return cdt_orientation(org, dst, p) == 0.f;
 }
 
-bool cdt_in_circumcircle(cdt_vec2 p, cdt_vec2 a, cdt_vec2 b, cdt_vec2 c) {
+int cdt_in_circumcircle(cdt_vec2 p, cdt_vec2 a, cdt_vec2 b, cdt_vec2 c) {
     // @Todo: Better math?
     //        "It is worth to mention that we have faced never-ending loops during 
     //         the flipping process when using only a simple determinant evaluation." -Kallmann
@@ -480,7 +482,7 @@ bool cdt_in_circumcircle(cdt_vec2 p, cdt_vec2 a, cdt_vec2 b, cdt_vec2 c) {
             (cx_*cx_ + cy_*cy_) * (ax_*by_-bx_*ay_)) > 0;
 }
 
-bool cdt_is_convex(cdt_vec2 a, cdt_vec2 b, cdt_vec2 c, cdt_vec2 d) {
+int cdt_is_convex(cdt_vec2 a, cdt_vec2 b, cdt_vec2 c, cdt_vec2 d) {
     // @Todo: SIMD?
     cdt_f32 x1 = b.x - a.x;
     cdt_f32 y1 = b.y - a.y;
@@ -499,7 +501,7 @@ bool cdt_is_convex(cdt_vec2 a, cdt_vec2 b, cdt_vec2 c, cdt_vec2 d) {
 }
 
 // This is for ear-clipping.
-bool cdt_in_triangle(cdt_vec2 p, cdt_vec2 a, cdt_vec2 b, cdt_vec2 c) {
+int cdt_in_triangle(cdt_vec2 p, cdt_vec2 a, cdt_vec2 b, cdt_vec2 c) {
     // @Todo: SIMD?
     cdt_vec2 ab = {b.x - a.x, b.y - a.y};
     cdt_vec2 bc = {c.x - b.x, c.y - b.y};
@@ -568,7 +570,7 @@ void cdt_ear_triangulate_simple_polygon(cdt_context *ctx, int num_verts, cdt_ver
                 { p[2].x - p[0].x, p[2].y - p[0].y },
             };
 
-            bool is_ear = 1;
+            int is_ear = 1;
             cdt_f32 orientation = e[0].x*e[1].y - e[0].y*e[1].x;
             if (orientation > 0.f) {
                 for (cdt_index_node *node = node_rgt->next; node != node_lft; node = node->next) {
@@ -629,8 +631,6 @@ ear_found:
 int cdt_vert_ccw_cmp(const void *vert1, const void *vert2) {
     cdt_vertex_Sort_Struct *va = (cdt_vertex_Sort_Struct *)vert1;
     cdt_vertex_Sort_Struct *vb = (cdt_vertex_Sort_Struct *)vert2;
-    cdt_vec2 a = va->vert->pos;
-    cdt_vec2 b = vb->vert->pos;
     cdt_f32 ax = va->dx;
     cdt_f32 ay = va->dy;
     cdt_f32 bx = vb->dx;
@@ -678,10 +678,6 @@ void cdt_destroy_vertex(cdt_context *ctx, cdt_vertex *vert) {
     qsort(outline, num_edges, sizeof(outline[0]), cdt_vert_ccw_cmp);
 
     // Retriangulate the hole created from vertex removal.
-    for (int i = 0; i < num_edges; ++i) {
-        cdt_vec2 pos = outline[i].vert->pos;
-        //printf("  (%.2f, %.2f)\n", pos.x, pos.y);
-    }
     cdt_ear_triangulate_simple_polygon(ctx, num_edges, outline);
 
     // Cleanup
@@ -800,7 +796,7 @@ cdt_vertex *cdt_insert_point(cdt_context *ctx, cdt_vec2 pos) {
     return new_vertex;
 }
 
-void cdt_insert_segment(cdt_context *ctx, cdt_id id, cdt_vertex *vert1, cdt_vertex *vert2) {
+void cdt_insert_segment(cdt_id id, cdt_vertex *vert1, cdt_vertex *vert2) {
     cdt_vec2 p = vert1->pos;
     cdt_vec2 q = vert2->pos;
 
@@ -940,9 +936,12 @@ void cdt_init(cdt_context *ctx, cdt_f32 x1, cdt_f32 y1, cdt_f32 x2, cdt_f32 y2, 
     memset(ctx, 0, sizeof(cdt_context));
 
     // @Todo: Support CW?
-    cdt_vec2 a = cdt_vec2{x1, y1};
-    cdt_vec2 b = cdt_vec2{x2, y2};
-    cdt_vec2 c = cdt_vec2{x3, y3};
+    cdt_vec2 a = {0};
+    cdt_vec2 b = {0};
+    cdt_vec2 c = {0};
+    a.x = x1; a.y = y1;
+    b.x = x2; b.y = y2;
+    c.x = x3; c.y = y3;
 
     cdt_vertex *va = cdt_create_vertex(ctx, a);
     cdt_vertex *vb = cdt_create_vertex(ctx, b);
@@ -968,7 +967,7 @@ void cdt_insert(cdt_context *ctx, cdt_id id, cdt_f32 x1, cdt_f32 y1, cdt_f32 x2,
     p2.y = y2;
     cdt_vertex *vtx2 = cdt_insert_point(ctx, p2);
 
-    cdt_insert_segment(ctx, id, vtx1, vtx2);
+    cdt_insert_segment(id, vtx1, vtx2);
 }
 
 void cdt_remove(cdt_context *ctx, cdt_id id) {
@@ -977,16 +976,16 @@ void cdt_remove(cdt_context *ctx, cdt_id id) {
     cdt_vertex_array vertices = {0};
 
     // Get a set of vertices to check. Yes, it is a stupid linear array.
-    for (int i = 0; i < ctx->edges.num; i+=1) {
-        cdt_edge *e = ctx->edges.data[i];
+    for (int idx = 0; idx < ctx->edges.num; idx+=1) {
+        cdt_edge *e = ctx->edges.data[idx];
         cdt_id_array *ids = &e->ids;
-        for (int i = 0; i < ids->num; i+=1) {
-            if (ids->data[i] == id) {
+        for (int j = 0; j < ids->num; j+=1) {
+            if (ids->data[j] == id) {
                 ids->num-=1;
-                ids->data[i] = ids->data[ids->num];
+                ids->data[j] = ids->data[ids->num];
                    
-                bool is_in1 = 0;
-                bool is_in2 = 0;
+                int is_in1 = 0;
+                int is_in2 = 0;
                 for (int i = 0; i < vertices.num; i+=1) {
                     if (vertices.data[i] == e->e[0].org) { is_in1 = 1; }
                     if (vertices.data[i] == e->e[2].org) { is_in2 = 1; }
@@ -1002,8 +1001,8 @@ void cdt_remove(cdt_context *ctx, cdt_id id) {
     for (int i = 0; i < vertices.num; i+=1) {
         cdt_vertex *v = vertices.data[i];
         int should_destroy = 1;
-        for (int i = 0; i < v->edges.num; i+=1) {
-            cdt_quad_edge *e = v->edges.data[i];
+        for (int j = 0; j < v->edges.num; j+=1) {
+            cdt_quad_edge *e = v->edges.data[j];
             if (cdt_is_constrained(e)) {
                 should_destroy = 0;
                 break;
