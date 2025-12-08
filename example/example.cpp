@@ -13,6 +13,7 @@
 #include <time.h>
 
 #include <vector>
+#include <list>
 
 #include "vendor/glad/glad.h"
 #include "vendor/GLFW/glfw3.h"
@@ -23,9 +24,6 @@
 #include "example_gl.h"
 #include "example_log.h"
 #include "../cdt.h"
-
-
-#include <list>
 
 // Globals
 //
@@ -48,6 +46,7 @@ float points[][2] = {
 
 #else
 /* Pentagon */
+#if 0
 float g_points[][2] = {
     { 1.000000f,  0.000000f},
     { 0.309016f,  0.951056f},
@@ -55,6 +54,20 @@ float g_points[][2] = {
     {-0.809016f, -0.587785f},
     { 0.309016f, -0.951056f},
 };
+#else
+float g_points[][2] = {
+    {0.26712908f, 0.0f       },
+    {0.17874938f, 0.2254902f },
+    {0.0f       , 0.267507f  },
+    {0.12611779f, 0.45378152f},
+    {0.10228103f, 0.7142857f },
+    {0.2701292f , 0.5994398f },
+    {0.43673982f, 0.7133057f },
+    {0.40913446f, 0.45378152f},
+    {0.53414787f, 0.27170867f},
+    {0.359685f  , 0.22240896f}
+};
+#endif
 #endif
 
 

@@ -55,6 +55,10 @@ typedef float         cdt_f32;
 typedef unsigned int  cdt_id;
 #define cdt_assert(exp) if (!(exp)) {*(volatile int*)0=0;}
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct cdt_vertex cdt_vertex;
 typedef struct cdt_quad_edge cdt_quad_edge;
 typedef struct cdt_edge cdt_edge;
@@ -101,10 +105,9 @@ struct cdt_vertex {
 
 struct cdt_quad_edge {
     cdt_vertex    *org;
-    //cdt_vertex    *debug_dst;
+    cdt_vertex    *debug_dst;
     cdt_quad_edge *onext_ptr;
     uint8_t    idx;       // [0,3]
-    uint8_t    visited;
 };
 
 struct cdt_edge {
@@ -118,11 +121,11 @@ typedef struct {
 } cdt_context;
 
 typedef struct {
-    bool        exists;
-    bool        on_edge;
-    cdt_vertex     *vertex;
-    cdt_quad_edge  *edge;
-} Locate_Result;
+    bool exists;
+    bool on_edge;
+    cdt_vertex *vertex;
+    cdt_quad_edge *edge;
+} cdt_locate_result;
 
 typedef struct {
     cdt_vertex *vert;
@@ -136,18 +139,29 @@ typedef struct cdt_index_node {
 } cdt_index_node;
 
 
-//void cdt_log(cdt_context *ctx) {
-//    FILE *file = fopen("subdivision.log", "wb");
-//    if (file) {
-//        fprintf(file, "\n");
-//        fprintf(file, "segments = [\n");
-//        for (cdt_edge *e : ctx->edges) {
-//            fprintf(file, "    ((%.2f, %.2f), (%.2f, %.2f)),\n", e->e[0].org->pos.x, e->e[0].org->pos.y, e->e[2].org->pos.x, e->e[2].org->pos.y);
-//        }
-//        fprintf(file, "]\n");
-//        fclose(file);
-//    }
-//}
+void cdt_init(cdt_context *ctx, cdt_f32 x1, cdt_f32 y1, cdt_f32 x2, cdt_f32 y2, cdt_f32 x3, cdt_f32 y3);
+void cdt_insert(cdt_context *ctx, cdt_id id, cdt_f32 x1, cdt_f32 y1, cdt_f32 x2, cdt_f32 y2);
+void cdt_remove(cdt_context *ctx, cdt_id id);
+
+
+#ifdef __cplusplus
+}
+#endif
+
+
+void cdt_log(cdt_context *ctx) {
+    FILE *file = fopen("subdivision.log", "wb");
+    if (file) {
+        fprintf(file, "\n");
+        fprintf(file, "segments = [\n");
+        for (int i = 0; i < ctx->edges.num; i+=1) {
+            cdt_edge *e = ctx->edges.data[i];
+            fprintf(file, "    ((%.2f, %.2f), (%.2f, %.2f)),\n", e->e[0].org->pos.x, e->e[0].org->pos.y, e->e[2].org->pos.x, e->e[2].org->pos.y);
+        }
+        fprintf(file, "]\n");
+        fclose(file);
+    }
+}
 
 
 // Helper data structure codes
@@ -330,10 +344,6 @@ cdt_quad_edge *cdt_rprev(cdt_quad_edge *e) {
     return cdt_onext(cdt_sym(e));
 }
 
-bool cdt_is_constrained(cdt_quad_edge *e) {
-    return cdt_get_edge(e)->ids.num > 0;
-}
-
 void cdt_splice(cdt_quad_edge *a, cdt_quad_edge *b) {
     cdt_quad_edge *alpha = cdt_rot(cdt_onext(a));
     cdt_quad_edge *beta  = cdt_rot(cdt_onext(b));
@@ -378,19 +388,14 @@ cdt_quad_edge *cdt_create_edge(cdt_context *ctx, cdt_vertex *org, cdt_vertex *ds
     edge->e[2].idx = 2;
     edge->e[3].idx = 3;
 
-    edge->e[0].visited = 0;
-    edge->e[1].visited = 0;
-    edge->e[2].visited = 0;
-    edge->e[3].visited = 0;
-
     // Primary
     edge->e[0].onext_ptr = &(edge->e[0]);
     edge->e[2].onext_ptr = &(edge->e[2]);
     edge->e[0].org = org;
     edge->e[2].org = dst;
 
-    //edge->e[0].debug_dst = dst;
-    //edge->e[2].debug_dst = org;
+    edge->e[0].debug_dst = dst;
+    edge->e[2].debug_dst = org;
 
     // Dual
     edge->e[1].onext_ptr = &(edge->e[3]);
@@ -422,6 +427,10 @@ cdt_quad_edge *cdt_connect(cdt_context *ctx, cdt_quad_edge *a, cdt_quad_edge *b)
     cdt_splice(e, cdt_lnext(a));
     cdt_splice(cdt_sym(e), b);
     return e;
+}
+
+bool cdt_is_constrained(cdt_quad_edge *e) {
+    return cdt_get_edge(e)->ids.num > 0;
 }
 
 
@@ -521,9 +530,9 @@ void cdt_flip_until_stack_is_empty(cdt_quad_edge_array *stk) {
         // @Robustness
         if (!cdt_is_constrained(e)) {
             if (cdt_in_circumcircle(cdt_dprev(e)->org->pos, cdt_dst(e)->pos, e->org->pos, cdt_dnext(e)->org->pos)) {
-                cdt_swap(e);
                 cdt_quad_edge_array_push(stk, cdt_lnext(e));
                 cdt_quad_edge_array_push(stk, cdt_dnext(e));
+                cdt_swap(e);
             }
         }
     }
@@ -560,7 +569,7 @@ void cdt_ear_triangulate_simple_polygon(cdt_context *ctx, int num_verts, cdt_ver
             };
 
             bool is_ear = 1;
-            float orientation = e[0].x*e[1].y - e[0].y*e[1].x;
+            cdt_f32 orientation = e[0].x*e[1].y - e[0].y*e[1].x;
             if (orientation > 0.f) {
                 for (cdt_index_node *node = node_rgt->next; node != node_lft; node = node->next) {
                     cdt_vec2 v = verts[node->idx].vert->pos;
@@ -682,7 +691,7 @@ void cdt_destroy_vertex(cdt_context *ctx, cdt_vertex *vert) {
     free(vert);
 }
 
-Locate_Result cdt_locate_point(cdt_context *ctx, cdt_vec2 target) {
+cdt_locate_result cdt_locate_point(cdt_context *ctx, cdt_vec2 target) {
     // @Todo: Better strategy for locating the point. 'Jump and Walk' is one 
     //        way to go. Should I implement spatial partitioning in here?
     //
@@ -692,7 +701,7 @@ Locate_Result cdt_locate_point(cdt_context *ctx, cdt_vec2 target) {
     //        If the "target" is close enough to an edge, we might want to project 
     //        it onto the edge.
     //
-    Locate_Result result = {0};
+    cdt_locate_result result = {0};
     cdt_quad_edge *begin_edge = &ctx->edges.data[0]->e[0];
 
     for (cdt_quad_edge *e1 = begin_edge;;) {
@@ -744,7 +753,7 @@ Locate_Result cdt_locate_point(cdt_context *ctx, cdt_vec2 target) {
 }
 
 cdt_vertex *cdt_insert_point(cdt_context *ctx, cdt_vec2 pos) {
-    Locate_Result locate = cdt_locate_point(ctx, pos); // @Todo: I should just inline it.
+    cdt_locate_result locate = cdt_locate_point(ctx, pos); // @Todo: I should just inline it.
 
     if (locate.exists) {
         return locate.vertex;
@@ -1007,6 +1016,7 @@ void cdt_remove(cdt_context *ctx, cdt_id id) {
 
     free(vertices.data);
 }
+
 
 /*
 ------------------------------------------------------------------------------
