@@ -105,7 +105,7 @@ struct cdt_vertex {
 
 struct cdt_quad_edge {
     cdt_vertex    *org;
-    cdt_vertex    *debug_dst;
+    //cdt_vertex    *debug_dst;
     cdt_quad_edge *onext_ptr;
     uint8_t    idx;       // [0,3]
 };
@@ -149,19 +149,19 @@ void cdt_remove(cdt_context *ctx, cdt_id id);
 #endif
 
 
-void cdt_log(cdt_context *ctx) {
-    FILE *file = fopen("subdivision.log", "wb");
-    if (file) {
-        fprintf(file, "\n");
-        fprintf(file, "segments = [\n");
-        for (int i = 0; i < ctx->edges.num; i+=1) {
-            cdt_edge *e = ctx->edges.data[i];
-            fprintf(file, "    ((%.2f, %.2f), (%.2f, %.2f)),\n", e->e[0].org->pos.x, e->e[0].org->pos.y, e->e[2].org->pos.x, e->e[2].org->pos.y);
-        }
-        fprintf(file, "]\n");
-        fclose(file);
-    }
-}
+//void cdt_log(cdt_context *ctx) {
+//    FILE *file = fopen("subdivision.log", "wb");
+//    if (file) {
+//        fprintf(file, "\n");
+//        fprintf(file, "segments = [\n");
+//        for (int i = 0; i < ctx->edges.num; i+=1) {
+//            cdt_edge *e = ctx->edges.data[i];
+//            fprintf(file, "    ((%.2f, %.2f), (%.2f, %.2f)),\n", e->e[0].org->pos.x, e->e[0].org->pos.y, e->e[2].org->pos.x, e->e[2].org->pos.y);
+//        }
+//        fprintf(file, "]\n");
+//        fclose(file);
+//    }
+//}
 
 
 // Helper data structure codes
@@ -291,7 +291,7 @@ bool cdt_queue_empty(cdt_queue *q) {
 
 
 
-// cdt_quad_edge Algebra
+// Quad Edge Algebra
 // 
 cdt_edge *cdt_get_edge(cdt_quad_edge *e) {
     return (cdt_edge *)(e - e->idx);
@@ -394,8 +394,8 @@ cdt_quad_edge *cdt_create_edge(cdt_context *ctx, cdt_vertex *org, cdt_vertex *ds
     edge->e[0].org = org;
     edge->e[2].org = dst;
 
-    edge->e[0].debug_dst = dst;
-    edge->e[2].debug_dst = org;
+    //edge->e[0].debug_dst = dst;
+    //edge->e[2].debug_dst = org;
 
     // Dual
     edge->e[1].onext_ptr = &(edge->e[3]);
@@ -883,13 +883,11 @@ void cdt_insert_segment(cdt_context *ctx, cdt_id id, cdt_vertex *vert1, cdt_vert
     while (!cdt_queue_empty(&intersectings)) {
         cdt_quad_edge *e = cdt_queue_pop(&intersectings);
 
-        // @Fix: Infinite loop + Strictness
         cdt_vec2 a = e->org->pos;
         cdt_vec2 b = cdt_dst(cdt_oprev(e))->pos;
         cdt_vec2 c = cdt_dst(e)->pos;
         cdt_vec2 d = cdt_lprev(e)->org->pos;
 
-        // @Temporary:
         if (cdt_is_constrained(e)) {
             cdt_assert(!"Intersecting constrains isn't allowed. Why would you do that? It is not covered atm. Sorry!");
         }
