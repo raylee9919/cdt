@@ -1,0 +1,131 @@
+/* ========================================================================
+
+                                                            
+
+                                                                    
+                                                                        
+                                         
+
+   ======================================================================== */
+
+typedef struct {
+    Vec2 position;
+    Vec2 uv;
+} Sprite_Vertex;
+
+typedef u32 Texture_Type;
+enum {
+    TEXTURE_TYPE_NULL   = 0,
+    TEXTURE_TYPE_PLAYER,
+    TEXTURE_TYPE_GROUND,
+    TEXTURE_TYPE_BUILDING,
+    TEXTURE_TYPE_COUNT
+};
+
+typedef struct {
+    Texture_Type type;
+    GLuint       gl_id;
+    u16          width;
+    u16          height;
+    u16          sprite_width;
+    u16          sprite_height;
+    u16          num_row;
+    u16          num_col;
+} Texture;
+
+typedef struct {
+    Texture_Type spritesheet;
+    u32 start_frame_index;
+    u32 num_frames;
+    f32 frame_interval;
+} Animation;
+
+typedef u32 Order_Type;
+enum {
+    ORDER_TYPE_IDLE,
+    ORDER_TYPE_MOVE,
+    ORDER_TYPE_COUNT
+};
+
+typedef u32 Animation_Type;
+enum {
+    ANIMATION_TYPE_INVALID=0,
+    ANIMATION_TYPE_PLAYER_IDLE,
+    ANIMATION_TYPE_PLAYER_RUN,
+    ANIMATION_TYPE_COUNT
+};
+
+typedef u32 Entity_Type;
+enum {
+    ENTITY_TYPE_NULL    = 0,
+    ENTITY_TYPE_PLAYER,
+    ENTITY_TYPE_COUNT
+};
+
+typedef u32 Entity_Flags;
+enum {
+    ENTITY_FLAG_DRAW            = 0x1,
+    ENTITY_FLAG_ANIMATE         = 0x2,
+    ENTITY_FLAG_FLIP_TEX_U      = 0x4,
+    ENTITY_FLAG_MOUSE_CONTROL   = 0x8,
+};
+
+typedef struct Entity Entity;
+struct Entity {
+    Entity         *next;
+    Entity         *prev;
+
+    u32             id;
+    Entity_Flags    flags;
+
+    Vec2            position;
+    Vec2            size;
+    f32             radius;
+    f32             speed;
+
+    Vec2            offset;
+    Texture_Type    texture;
+
+    // Order
+    Order_Type      order;
+    Vec2            order_position;
+
+    // Animation
+    f32 animation_t;
+    u32 animation_frame_offset;
+
+    Vec2           *navmesh;
+
+    // Draw
+    f32 u1, v1, u2, v2;
+
+};
+
+typedef struct {
+    GLFWwindow *window;
+    int         framebuffer_width;
+    int         framebuffer_height;
+
+    u64     tick;
+    f64     last_frame_time;
+    f32     dt;
+    f32     shader_time;
+    Vec2    resolution;
+
+    u32     next_entity_id;
+    Entity *entity_sentinel;
+
+    cdt_context navmesh;
+
+    Vec2    camera_position;
+
+    Texture textures[TEXTURE_TYPE_COUNT];
+    Animation animations[ANIMATION_TYPE_COUNT];
+    Animation_Type animation_map[TEXTURE_TYPE_COUNT][ORDER_TYPE_COUNT];
+
+    GLuint  sprite_shader;
+    GLuint  sprite_shader_model;
+    GLuint  sprite_shader_vp;
+} Engine;
+
+static Engine *engine;

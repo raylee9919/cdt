@@ -8,23 +8,20 @@
 
    ======================================================================== */
 
+typedef struct {
+    float *floats;
+    int   *counts;
+} Parse_Result;
 
-#define log_assert(exp) if (!(exp)) { *(volatile int *)0 = 0; }
-
-static int hex_to_int(char ch) {
+int hex_to_int(char ch) {
     if (ch >= '0' && ch <= '9') { return ch - '0'; }
     if (ch >= 'A' && ch <= 'F') { return ch - 'A' + 10; }
     if (ch >= 'a' && ch <= 'f') { return ch - 'a' + 10; }
     return -1;
 }
 
-typedef struct {
-    std::vector<float> floats;
-    std::vector<int>   counts;
-} Parse_Result;
-
 Parse_Result float_array_from_log_file(const char *path) {
-    Parse_Result result = {};
+    Parse_Result result = {0};
 
     FILE *file = fopen(path, "rb");
     if (file) {
@@ -42,11 +39,11 @@ Parse_Result float_array_from_log_file(const char *path) {
             if (c==' ' || c =='\r' || c =='\n' || c=='\t') {
                 cursor += 1; 
             } else if (c==';') {
-                result.counts.push_back(cnt);
+                arrput(result.counts, cnt);
                 cnt = 0;
                 cursor += 1; 
             } else {
-                log_assert((c == '0') && *(cursor+1)=='x');
+                assert((c == '0') && *(cursor+1)=='x');
                 cursor += 2;
 
                 uint32_t integer = 0;
@@ -56,7 +53,7 @@ Parse_Result float_array_from_log_file(const char *path) {
                 }
 
                 float fp = *((float *)&(integer));
-                result.floats.push_back(fp);
+                arrput(result.floats, fp);
                 cnt += 1;
             }
         }

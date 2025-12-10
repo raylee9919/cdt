@@ -1,19 +1,13 @@
 /* ========================================================================
 
-   (C) Copyright 2025 by Seong Woo Lee, All Rights Reserved.
+                                                            
 
-   This software is provided 'as-is', without any express or implied
-   warranty. In no event will the authors be held liable for any damages
-   arising from the use of this software.
+                                                                    
+                                                                        
+                                         
 
    ======================================================================== */
 
-
-
-const char *simple_vs = 
-#include "shader/simple_vs.glsl"
-const char *simple_fs = 
-#include "shader/simple_fs.glsl"
 
 void gl_framebuffer_resize_callback(GLFWwindow* window, int width, int height) {
     (void)window;
@@ -44,7 +38,7 @@ GLuint glcreateshader(const char *vsrc, const char *fsrc) {
         glLinkProgram(program);
 
         glValidateProgram(program);
-        GLint linked = false;
+        GLint linked = 0;
         glGetProgramiv(program, GL_LINK_STATUS, &linked);
         if (!linked) {
             GLsizei stub;

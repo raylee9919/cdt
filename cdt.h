@@ -106,9 +106,10 @@ struct cdt_vertex {
 
 struct cdt_quad_edge {
     cdt_vertex    *org;
-    //cdt_vertex    *debug_dst;
     cdt_quad_edge *onext_ptr;
-    uint8_t    idx;       // [0,3]
+    uint8_t        idx;       // [0,3]
+
+    //cdt_vertex    *debug_dst;
 };
 
 struct cdt_edge {
@@ -132,7 +133,7 @@ typedef struct {
     cdt_vertex *vert;
     cdt_f32 dx;
     cdt_f32 dy;
-} cdt_vertex_Sort_Struct;
+} cdt_vertexsort_struct;
 
 typedef struct cdt_index_node cdt_index_node;
 struct cdt_index_node {
@@ -540,7 +541,7 @@ void cdt_flip_until_stack_is_empty(cdt_quad_edge_array *stk) {
     }
 }
 
-void cdt_ear_triangulate_simple_polygon(cdt_context *ctx, int num_verts, cdt_vertex_Sort_Struct *verts) {
+void cdt_ear_triangulate_simple_polygon(cdt_context *ctx, int num_verts, cdt_vertexsort_struct *verts) {
     cdt_quad_edge_array new_edges = {0};
 
     // Preprocessing..
@@ -629,8 +630,8 @@ ear_found:
 
 // @Robustness:
 int cdt_vert_ccw_cmp(const void *vert1, const void *vert2) {
-    cdt_vertex_Sort_Struct *va = (cdt_vertex_Sort_Struct *)vert1;
-    cdt_vertex_Sort_Struct *vb = (cdt_vertex_Sort_Struct *)vert2;
+    cdt_vertexsort_struct *va = (cdt_vertexsort_struct *)vert1;
+    cdt_vertexsort_struct *vb = (cdt_vertexsort_struct *)vert2;
     cdt_f32 ax = va->dx;
     cdt_f32 ay = va->dy;
     cdt_f32 bx = vb->dx;
@@ -667,7 +668,7 @@ void cdt_destroy_vertex(cdt_context *ctx, cdt_vertex *vert) {
     }
 
     // Angular sort outline vertices ccw.
-    cdt_vertex_Sort_Struct *outline = (cdt_vertex_Sort_Struct *)malloc(sizeof(cdt_vertex_Sort_Struct)*num_edges);
+    cdt_vertexsort_struct *outline = (cdt_vertexsort_struct *)malloc(sizeof(cdt_vertexsort_struct)*num_edges);
     for (int i = 0; i < num_edges; i += 1) {
         cdt_quad_edge *e = edges_to_destroy[i];
         outline[i].vert = cdt_dst(e);
