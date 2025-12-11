@@ -26,3 +26,6 @@ typedef struct {
 typedef struct {
     float e[4][4];
 } M4x4;
+
+#define F32_MAX ( 3.402823e+38f)
+#define F32_MIN (-3.402823e+38f)

@@ -17,6 +17,7 @@ typedef u32 Texture_Type;
 enum {
     TEXTURE_TYPE_NULL   = 0,
     TEXTURE_TYPE_PLAYER,
+    TEXTURE_TYPE_SKELETON,
     TEXTURE_TYPE_GROUND,
     TEXTURE_TYPE_BUILDING,
     TEXTURE_TYPE_COUNT
@@ -44,6 +45,7 @@ typedef u32 Order_Type;
 enum {
     ORDER_TYPE_IDLE,
     ORDER_TYPE_MOVE,
+    ORDER_TYPE_DIE,
     ORDER_TYPE_COUNT
 };
 
@@ -52,6 +54,12 @@ enum {
     ANIMATION_TYPE_INVALID=0,
     ANIMATION_TYPE_PLAYER_IDLE,
     ANIMATION_TYPE_PLAYER_RUN,
+    ANIMATION_TYPE_PLAYER_DIE,
+    ANIMATION_TYPE_SKELETON_IDLE,
+    ANIMATION_TYPE_SKELETON_DIE,
+    ANIMATION_TYPE_SKELETON_ATTACK,
+    ANIMATION_TYPE_SKELETON_HIT,
+    ANIMATION_TYPE_SKELETON_MOVE,
     ANIMATION_TYPE_COUNT
 };
 
@@ -68,6 +76,7 @@ enum {
     ENTITY_FLAG_ANIMATE         = 0x2,
     ENTITY_FLAG_FLIP_TEX_U      = 0x4,
     ENTITY_FLAG_MOUSE_CONTROL   = 0x8,
+    ENTITY_FLAG_DIEABLE         = 0x10,
 };
 
 typedef struct Entity Entity;
@@ -82,6 +91,8 @@ struct Entity {
     Vec2            size;
     f32             radius;
     f32             speed;
+
+    f32             hp;
 
     Vec2            offset;
     Texture_Type    texture;
@@ -126,6 +137,10 @@ typedef struct {
     GLuint  sprite_shader;
     GLuint  sprite_shader_model;
     GLuint  sprite_shader_vp;
+
+    GLuint simple_shader;
+    GLuint simple_shader_vp;
+    GLuint simple_shader_color;
 } Engine;
 
 static Engine *engine;

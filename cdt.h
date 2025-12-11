@@ -1,5 +1,5 @@
 /* 
-   cdt - v0.1 - Dynamic 2D Constrained Delaunay Triangulation Library
+   cdt - v0.11 - Dynamic 2D Constrained Delaunay Triangulation Library
    Seong Woo Lee 2025
 
 
@@ -12,7 +12,8 @@
 
 
    LIMITATION
-       Constrained polygons cannot overlap; treat each constraint as a solid obstacle.
+       Constrained edges cannot intersect each other; treat each constraint
+       as a solid obstacle.
 
 
    USAGE
@@ -108,13 +109,11 @@ struct cdt_quad_edge {
     cdt_vertex    *org;
     cdt_quad_edge *onext_ptr;
     uint8_t        idx;       // [0,3]
-
-    //cdt_vertex    *debug_dst;
 };
 
 struct cdt_edge {
     cdt_quad_edge e[4];
-    cdt_id_array ids;
+    cdt_id_array  ids;
 };
 
 typedef struct {
@@ -133,7 +132,7 @@ typedef struct {
     cdt_vertex *vert;
     cdt_f32 dx;
     cdt_f32 dy;
-} cdt_vertexsort_struct;
+} cdt_vertex_sort_struct;
 
 typedef struct cdt_index_node cdt_index_node;
 struct cdt_index_node {
@@ -141,10 +140,30 @@ struct cdt_index_node {
     cdt_index_node *next;
 };
 
+typedef struct {
+    cdt_quad_edge *edges[3];
+    cdt_f32 x[3];
+    cdt_f32 y[3];
+} cdt_triangle;
 
+typedef struct {
+    cdt_triangle triangles[3];
+} cdt_triangles;
+
+
+// APIs
 void cdt_init(cdt_context *ctx, cdt_f32 x1, cdt_f32 y1, cdt_f32 x2, cdt_f32 y2, cdt_f32 x3, cdt_f32 y3);
+
 void cdt_insert(cdt_context *ctx, cdt_id id, cdt_f32 x1, cdt_f32 y1, cdt_f32 x2, cdt_f32 y2);
 void cdt_remove(cdt_context *ctx, cdt_id id);
+
+int cdt_get_vertex_count(cdt_context *ctx);
+int cdt_get_edge_count(cdt_context *ctx);
+int cdt_get_triangle_count(cdt_context *ctx);
+
+int cdt_is_constrained(cdt_quad_edge *quad_edge);
+cdt_triangle cdt_get_triangle_containing_point(cdt_context *ctx, cdt_f32 x, cdt_f32 y);
+cdt_triangles cdt_get_adjacent_triangles(cdt_triangle triangle);
 
 
 #ifdef __cplusplus
@@ -397,9 +416,6 @@ cdt_quad_edge *cdt_create_edge(cdt_context *ctx, cdt_vertex *org, cdt_vertex *ds
     edge->e[0].org = org;
     edge->e[2].org = dst;
 
-    //edge->e[0].debug_dst = dst;
-    //edge->e[2].debug_dst = org;
-
     // Dual
     edge->e[1].onext_ptr = &(edge->e[3]);
     edge->e[3].onext_ptr = &(edge->e[1]);
@@ -431,11 +447,6 @@ cdt_quad_edge *cdt_connect(cdt_context *ctx, cdt_quad_edge *a, cdt_quad_edge *b)
     cdt_splice(cdt_sym(e), b);
     return e;
 }
-
-int cdt_is_constrained(cdt_quad_edge *e) {
-    return cdt_get_edge(e)->ids.num > 0;
-}
-
 
 // Geometry/Math
 //
@@ -541,7 +552,7 @@ void cdt_flip_until_stack_is_empty(cdt_quad_edge_array *stk) {
     }
 }
 
-void cdt_ear_triangulate_simple_polygon(cdt_context *ctx, int num_verts, cdt_vertexsort_struct *verts) {
+void cdt_ear_triangulate_simple_polygon(cdt_context *ctx, int num_verts, cdt_vertex_sort_struct *verts) {
     cdt_quad_edge_array new_edges = {0};
 
     // Preprocessing..
@@ -630,8 +641,8 @@ ear_found:
 
 // @Robustness:
 int cdt_vert_ccw_cmp(const void *vert1, const void *vert2) {
-    cdt_vertexsort_struct *va = (cdt_vertexsort_struct *)vert1;
-    cdt_vertexsort_struct *vb = (cdt_vertexsort_struct *)vert2;
+    cdt_vertex_sort_struct *va = (cdt_vertex_sort_struct *)vert1;
+    cdt_vertex_sort_struct *vb = (cdt_vertex_sort_struct *)vert2;
     cdt_f32 ax = va->dx;
     cdt_f32 ay = va->dy;
     cdt_f32 bx = vb->dx;
@@ -668,7 +679,7 @@ void cdt_destroy_vertex(cdt_context *ctx, cdt_vertex *vert) {
     }
 
     // Angular sort outline vertices ccw.
-    cdt_vertexsort_struct *outline = (cdt_vertexsort_struct *)malloc(sizeof(cdt_vertexsort_struct)*num_edges);
+    cdt_vertex_sort_struct *outline = (cdt_vertex_sort_struct *)malloc(sizeof(cdt_vertex_sort_struct)*num_edges);
     for (int i = 0; i < num_edges; i += 1) {
         cdt_quad_edge *e = edges_to_destroy[i];
         outline[i].vert = cdt_dst(e);
@@ -827,7 +838,6 @@ void cdt_insert_segment(cdt_id id, cdt_vertex *vert1, cdt_vertex *vert2) {
     // the number of edges in a triangulation remains unchanged. Therefore, we 
     // don't need to create new edges-the subdivision is already fullly triangulated.
     //
-
 
     cdt_queue intersectings = {0};
 
@@ -1014,6 +1024,67 @@ void cdt_remove(cdt_context *ctx, cdt_id id) {
 
     free(vertices.data);
 }
+
+int cdt_get_vertex_count(cdt_context *ctx) {
+    return ctx->vertices.num;
+}
+
+int cdt_get_edge_count(cdt_context *ctx) {
+    return ctx->edges.num;
+}
+
+int cdt_get_triangle_count(cdt_context *ctx) {
+    // F = 2 - V + E
+    return 2 - ctx->vertices.num + ctx->edges.num;
+}
+
+cdt_triangle cdt_get_triangle_containing_point(cdt_context *ctx, cdt_f32 x, cdt_f32 y) {
+    cdt_triangle result = {0};
+    cdt_vec2 p = {0};
+    p.x = x;
+    p.y = y;
+    cdt_locate_result loc = cdt_locate_point(ctx, p);
+    if (loc.exists || loc.on_edge) {
+        cdt_assert(!"Not covered yet.");
+    } else {
+        result.edges[0] = loc.edge;
+        result.edges[1] = cdt_lnext(result.edges[0]);
+        result.edges[2] = cdt_lnext(result.edges[1]);
+        result.x[0] = result.edges[0]->org->pos.x;
+        result.y[0] = result.edges[0]->org->pos.y;
+        result.x[1] = result.edges[1]->org->pos.x;
+        result.y[1] = result.edges[1]->org->pos.y;
+        result.x[2] = result.edges[2]->org->pos.x;
+        result.y[2] = result.edges[2]->org->pos.y;
+    }
+
+    return result;
+}
+
+cdt_triangles cdt_get_adjacent_triangles(cdt_triangle triangle) {
+    cdt_triangles result = {0};
+    for (int i = 0; i < 3; ++i) {
+        cdt_triangle *tri = result.triangles + i;
+        {
+            tri->edges[0] = cdt_sym(triangle.edges[0]);
+            tri->edges[1] = cdt_lnext(tri->edges[0]);
+            tri->edges[2] = cdt_lnext(tri->edges[1]);
+            tri->x[0] = tri->edges[0]->org->pos.x;
+            tri->y[0] = tri->edges[0]->org->pos.y;
+            tri->x[1] = tri->edges[1]->org->pos.x;
+            tri->y[1] = tri->edges[1]->org->pos.y;
+            tri->x[2] = tri->edges[2]->org->pos.x;
+            tri->y[2] = tri->edges[2]->org->pos.y;
+        }
+
+    }
+    return result;
+}
+
+int cdt_is_constrained(cdt_quad_edge *e) {
+    return cdt_get_edge(e)->ids.num > 0;
+}
+
 
 
 /*

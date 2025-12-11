@@ -29,9 +29,10 @@
 #include "ex_engine.h"
 #include "ex_gl.h"
 #include "ex_log.h"
-#include "ex_sprite_player.h"
-#include "ex_sprite_ground.h"
-#include "ex_sprite_building.h"
+#include "sprite/ex_sprite_player.h"
+#include "sprite/ex_sprite_skeleton.h"
+#include "sprite/ex_sprite_ground.h"
+#include "sprite/ex_sprite_building.h"
 
 // [.c]
 //
@@ -66,10 +67,6 @@ int main(void) {
     glGenBuffers(1, &vio);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vio);
 
-    GLuint simple_shader       = glcreateshader(simple_vs, simple_fs);
-    GLuint simple_shader_vp    = glad_glGetUniformLocation(simple_shader, "vp");
-    GLuint simple_shader_color = glad_glGetUniformLocation(simple_shader, "color");
-
     glDisable(GL_DEPTH_TEST); 
     glDepthFunc(GL_LEQUAL);
 
@@ -79,27 +76,26 @@ int main(void) {
     engine = (Engine *)malloc(sizeof(Engine));
     engine_init(window);
 
-    engine->resolution.x = 1280.f;
-    engine->resolution.y = 720.f;
-    engine_create_texture(TEXTURE_TYPE_PLAYER, SPRITESHEET_PLAYER_WIDTH, SPRITESHEET_PLAYER_HEIGHT, SPRITE_PLAYER_WIDTH, SPRITE_PLAYER_HEIGHT, SPRITESHEET_PLAYER_ROWS, SPRITESHEET_PLAYER_COLUMNS, spritesheet_player);
-    engine_create_texture(TEXTURE_TYPE_GROUND, GRASS_TILE_WIDTH, GRASS_TILE_HEIGHT, GRASS_TILE_WIDTH, GRASS_TILE_HEIGHT, 1, 1, grass_tile);
-    engine_create_texture(TEXTURE_TYPE_BUILDING, SPRITE_BUILDING_WIDTH, SPRITE_BUILDING_HEIGHT, SPRITE_BUILDING_WIDTH, SPRITE_BUILDING_HEIGHT, 1, 1, sprite_building);
-    engine_create_animation(ANIMATION_TYPE_PLAYER_IDLE, TEXTURE_TYPE_PLAYER, 0, 4, 0.25f);
-    engine_create_animation(ANIMATION_TYPE_PLAYER_RUN, TEXTURE_TYPE_PLAYER, 8, 6, 0.1f);
-
     engine->sprite_shader       = glcreateshader(sprite_vs, sprite_fs);
     engine->sprite_shader_model = glad_glGetUniformLocation(engine->sprite_shader, "model");
     engine->sprite_shader_vp    = glad_glGetUniformLocation(engine->sprite_shader, "vp");
 
+    engine->simple_shader       = glcreateshader(simple_vs, simple_fs);
+    engine->simple_shader_vp    = glad_glGetUniformLocation(engine->simple_shader, "vp");
+    engine->simple_shader_color = glad_glGetUniformLocation(engine->simple_shader, "color");
+
+
 
     cdt_init(&engine->navmesh, 0, 4096.f, -4096.f, -4096.f, 4096.f, -4096.f);
 
+#if 0
     Entity *ground = engine_alloc_entity(ENTITY_FLAG_DRAW); {
         ground->size    = litv2(1024.f, 1024.f);
         ground->texture = TEXTURE_TYPE_GROUND;
         ground->u1 = 0.f; ground->v1 = 0.f;
         ground->u2 = 16.f; ground->v2 = 16.f;
     }
+#endif
 
     for (int r = 0; r < 4; ++r) {
         for (int c = 0; c < 4; ++c) {
@@ -123,19 +119,30 @@ int main(void) {
         }
     }
 
-    Entity *player = engine_alloc_entity(ENTITY_FLAG_DRAW|ENTITY_FLAG_ANIMATE|ENTITY_FLAG_MOUSE_CONTROL); {
+    Entity *player = engine_alloc_entity(ENTITY_FLAG_DRAW|ENTITY_FLAG_ANIMATE|
+                                         ENTITY_FLAG_MOUSE_CONTROL|ENTITY_FLAG_DIEABLE); 
+    {
         player->position = litv2( 0.f,  0.f);
         player->size     = litv2(SPRITE_PLAYER_WIDTH, SPRITE_PLAYER_HEIGHT);
         player->radius   = 8.f;
         player->speed    = 150.0f;
+        player->hp       = 100.f;
         player->texture  = TEXTURE_TYPE_PLAYER;
         player->offset   = litv2(0.f, -18.f);
         player->order    = ORDER_TYPE_IDLE;
     }
 
-
-
-
+    {
+        Entity *skeleton = engine_alloc_entity(ENTITY_FLAG_DRAW|ENTITY_FLAG_ANIMATE|ENTITY_FLAG_DIEABLE); 
+        skeleton->position = litv2( 0.f, 80.f);
+        skeleton->size     = litv2(SPRITE_SKELETON_WIDTH, SPRITE_SKELETON_HEIGHT);
+        skeleton->radius   = 8.f;
+        skeleton->speed    = 150.0f;
+        skeleton->hp       = 100.f;
+        skeleton->texture  = TEXTURE_TYPE_SKELETON;
+        skeleton->offset   = litv2(0.f, -18.f);
+        skeleton->order    = ORDER_TYPE_IDLE;
+    }
 
 
     cdt_vec2 *edge_end_points = 0;
@@ -153,6 +160,10 @@ int main(void) {
         // Clear
         arrsetlen(edge_end_points, 0);
         arrsetlen(is_constrained, 0);
+        glClearColor(0.05f,0.05f,0.05f,1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        glClearDepth(1.0f);
+        glClear(GL_DEPTH_BUFFER_BIT);
 
 
         // Update entities
@@ -166,11 +177,6 @@ int main(void) {
         glViewport(0, 0, engine->framebuffer_width, engine->framebuffer_height);
 
 
-        glClearColor(0.05f,0.05f,0.05f,1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
-
-        glClearDepth(1.0f);
-        glClear(GL_DEPTH_BUFFER_BIT);
 
 
         for (Entity *entity = engine->entity_sentinel->next; entity != engine->entity_sentinel; entity = entity->next) {
@@ -192,7 +198,8 @@ int main(void) {
         }
 
 
-        glUseProgram(simple_shader);
+#if 0
+        glUseProgram(engine->simple_shader);
         glEnableVertexAttribArray(0);
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
         {
@@ -201,18 +208,19 @@ int main(void) {
             glBufferData(GL_ARRAY_BUFFER, arrlen(edge_end_points)*sz, edge_end_points, GL_DYNAMIC_DRAW);
             for (int i = 0; i < arrlen(is_constrained); i+=1) {
                 if (is_constrained[i]) {
-                    glUniform4f(simple_shader_color, 1.f, 1.f, 0.1f, 1.0f);
+                    glUniform4f(engine->simple_shader_color, 1.f, 1.f, 0.1f, 1.0f);
                 } else {
-                    glUniform4f(simple_shader_color, 0.f, 0.f, 0.f, 1.0f);
+                    glUniform4f(engine->simple_shader_color, 0.f, 0.f, 0.f, 1.0f);
                 }
+                M4x4 view_proj = m4x4_view_proj(engine->camera_position, engine->resolution);
+                glUniformMatrix4fv(engine->simple_shader_vp, 1, GL_TRUE, &view_proj.e[0][0]);
                 glDrawArrays(GL_LINES, i*2, 2);
             }
         }
-        M4x4 view_proj = m4x4_view_proj(engine->camera_position, engine->resolution);
-        glUniformMatrix4fv(simple_shader_vp, 1, GL_TRUE, &view_proj.e[0][0]);
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
         glDisableVertexAttribArray(0);
         glUseProgram(0);
+#endif
 
 
         glfwSwapBuffers(engine->window);
