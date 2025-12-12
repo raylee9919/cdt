@@ -1,17 +1,12 @@
 /* ========================================================================
 
-   (C) Copyright 2025 by Seong Woo Lee, All Rights Reserved.
+                                                            
 
-   This software is provided 'as-is', without any express or implied
-   warranty. In no event will the authors be held liable for any damages
-   arising from the use of this software.
+                                                                    
+                                                                        
+                                         
 
    ======================================================================== */
-
-typedef struct {
-    float *floats;
-    int   *counts;
-} Parse_Result;
 
 int hex_to_int(char ch) {
     if (ch >= '0' && ch <= '9') { return ch - '0'; }

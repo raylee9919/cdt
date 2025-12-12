@@ -28,7 +28,6 @@
 #include "ex_math.h"
 #include "ex_engine.h"
 #include "ex_gl.h"
-#include "ex_log.h"
 #include "sprite/ex_sprite_player.h"
 #include "sprite/ex_sprite_skeleton.h"
 #include "sprite/ex_sprite_ground.h"

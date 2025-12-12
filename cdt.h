@@ -161,7 +161,7 @@ int cdt_get_vertex_count(cdt_context *ctx);
 int cdt_get_edge_count(cdt_context *ctx);
 int cdt_get_triangle_count(cdt_context *ctx);
 
-int cdt_is_constrained(cdt_quad_edge *quad_edge);
+int cdt_is_constrained(cdt_edge *edge);
 cdt_triangle cdt_get_triangle_containing_point(cdt_context *ctx, cdt_f32 x, cdt_f32 y);
 cdt_triangles cdt_get_adjacent_triangles(cdt_triangle triangle);
 
@@ -542,7 +542,7 @@ void cdt_flip_until_stack_is_empty(cdt_quad_edge_array *stk) {
         cdt_quad_edge *e = cdt_stack_pop(stk);
 
         // @Robustness
-        if (!cdt_is_constrained(e)) {
+        if (!cdt_is_constrained(cdt_get_edge(e))) {
             if (cdt_in_circumcircle(cdt_dprev(e)->org->pos, cdt_dst(e)->pos, e->org->pos, cdt_dnext(e)->org->pos)) {
                 cdt_quad_edge_array_push(stk, cdt_lnext(e));
                 cdt_quad_edge_array_push(stk, cdt_dnext(e));
@@ -895,7 +895,7 @@ void cdt_insert_segment(cdt_id id, cdt_vertex *vert1, cdt_vertex *vert2) {
         cdt_vec2 c = cdt_dst(e)->pos;
         cdt_vec2 d = cdt_lprev(e)->org->pos;
 
-        if (cdt_is_constrained(e)) {
+        if (cdt_is_constrained(cdt_get_edge(e))) {
             cdt_assert(!"Intersecting constrains isn't allowed. Why would you do that? It is not covered atm. Sorry!");
         }
 
@@ -1014,7 +1014,7 @@ void cdt_remove(cdt_context *ctx, cdt_id id) {
         int should_destroy = 1;
         for (int j = 0; j < v->edges.num; j+=1) {
             cdt_quad_edge *e = v->edges.data[j];
-            if (cdt_is_constrained(e)) {
+            if (cdt_is_constrained(cdt_get_edge(e))) {
                 should_destroy = 0;
                 break;
             }
@@ -1081,9 +1081,10 @@ cdt_triangles cdt_get_adjacent_triangles(cdt_triangle triangle) {
     return result;
 }
 
-int cdt_is_constrained(cdt_quad_edge *e) {
-    return cdt_get_edge(e)->ids.num > 0;
+int cdt_is_constrained(cdt_edge *edge) {
+    return edge->ids.num > 0;
 }
+
 
 
 
