@@ -1,61 +1,3 @@
-FILE *insert_log_file;
-
-float g_points[][2] = {
-    {0.26712908f, 0.0f       },
-    {0.17874938f, 0.2254902f },
-    {0.0f       , 0.267507f  },
-    {0.12611779f, 0.45378152f},
-    {0.10228103f, 0.7142857f },
-    {0.2701292f , 0.5994398f },
-    {0.43673982f, 0.7133057f },
-    {0.40913446f, 0.45378152f},
-    {0.53414787f, 0.27170867f},
-    {0.359685f  , 0.22240896f}
-};
-
-
-
-#if 0
-    // Log
-    char log_file_name[64];
-    time_t now = time(0);
-    strftime(log_file_name, sizeof(log_file_name), "insert_%Y%m%d_%H%M%S.log", localtime(&now));
-    insert_log_file = fopen(log_file_name, "wb");
-    if (!insert_log_file) {
-        fprintf(stderr, "[Error] Could not open insert log.\n");
-        return -1;
-    } else {
-        // Disabling the file cache prevents data from being discarded, even if 
-        // the process is terminated in a debugger. ..or does it?
-        setvbuf(insert_log_file, 0, _IONBF, 0);
-    }
-#endif
-
-{ // Push polygon around mouse position for visual cue.
-    double xpos, ypos;
-    glfwGetCursorPos(window, &xpos, &ypos);
-
-    double xn =   (xpos / fw)*2.f - 1.f;
-    double yn = -((ypos / fh)*2.f - 1.f);
-
-    float mx = (float)xn/scale;
-    float my = (float)yn/scale;
-
-    for (int i = 0; i < arrcnt(g_points); i += 1) {
-        float x1 = polygon_scale*g_points[i][0];
-        float y1 = polygon_scale*g_points[i][1];
-        float x2 = polygon_scale*g_points[(i+1)%arrcnt(g_points)][0];
-        float y2 = polygon_scale*g_points[(i+1)%arrcnt(g_points)][1];
-        cdt_vec2 p1 = {mx+x1,my+y1};
-        cdt_vec2 p2 = {mx+x2,my+y2};
-        arrput(edge_end_points, p1);
-        arrput(edge_end_points, p2);
-
-        arrput(is_constrained, 0);
-    }
-}
-
-
 
 void callback_scroll(GLFWwindow *window, double xoffset, double yoffset) {
     COMPILER_UNREFERENCED(xoffset);
@@ -162,5 +104,3 @@ void callback_drop_down(GLFWwindow *window, int count, const char **paths) {
         }
     }
 }
-
-fclose(insert_log_file);

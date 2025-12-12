@@ -21,10 +21,10 @@
 //
 #define STB_DS_IMPLEMENTATION
 #define STBDS_ASSERT assert
-#include "vendor/stb/stb_ds.h"
-#include "vendor/glad/glad.h"
-#include "vendor/GLFW/glfw3.h"
-#include "../cdt.h"
+#include "../vendor/stb/stb_ds.h"
+#include "../vendor/glad/glad.h"
+#include "../vendor/GLFW/glfw3.h"
+#include "../../cdt.h"
 #include "ex_math.h"
 #include "ex_engine.h"
 #include "ex_gl.h"
@@ -48,7 +48,7 @@ int main(void) {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    GLFWwindow *window = glfwCreateWindow(1920, 1080, "A rough night", 0, 0);
+    GLFWwindow *window = glfwCreateWindow(1920, 1080, "CDT Game", 0, 0);
     glfwMakeContextCurrent(window);
 
 
