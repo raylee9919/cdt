@@ -43,8 +43,8 @@ void engine_init(GLFWwindow *window) {
     engine->window = window;
     engine->last_frame_time = glfwGetTime();
 
-    engine->resolution.x = 1600.f;
-    engine->resolution.y = 900.f;
+    engine->resolution.x = 1920.f;
+    engine->resolution.y = 1080.f;
 
     engine_create_texture(TEXTURE_TYPE_PLAYER, SPRITESHEET_PLAYER_WIDTH, SPRITESHEET_PLAYER_HEIGHT, SPRITE_PLAYER_WIDTH, SPRITE_PLAYER_HEIGHT, SPRITESHEET_PLAYER_ROWS, SPRITESHEET_PLAYER_COLUMNS, spritesheet_player);
     engine_create_texture(TEXTURE_TYPE_SKELETON, SPRITESHEET_SKELETON_WIDTH, SPRITESHEET_SKELETON_HEIGHT, SPRITE_SKELETON_WIDTH, SPRITE_SKELETON_HEIGHT, SPRITESHEET_SKELETON_ROWS, SPRITESHEET_SKELETON_COLUMNS, spritesheet_skeleton);
@@ -84,6 +84,8 @@ void engine_tick(void) {
     engine->shader_time += engine->dt; // @Todo: Reset trick
 
     glfwGetFramebufferSize(engine->window, &engine->framebuffer_width, &engine->framebuffer_height);
+
+    engine->line_shader_buffer.clear();
 }
 
 Entity *engine_alloc_entity(Entity_Flags flags) {
@@ -122,7 +124,7 @@ void engine_update_entity(Entity *entity) {
 
     // Transition
     //
-    if (entity->flags & ENTITY_FLAG_MOUSE_CONTROL && 
+    if ((entity->flags & ENTITY_FLAG_MOUSE_CONTROL) && 
         (entity->order == ORDER_TYPE_IDLE || entity->order == ORDER_TYPE_MOVE)) 
     {
         int state = glfwGetMouseButton(engine->window, GLFW_MOUSE_BUTTON_RIGHT);
@@ -150,115 +152,206 @@ void engine_update_entity(Entity *entity) {
             //
             cdt_triangle src_tri = cdt_get_triangle_containing_point(&engine->navmesh, entity->position.x, entity->position.y);
             cdt_triangle dst_tri = cdt_get_triangle_containing_point(&engine->navmesh, dst_x, dst_y);
-            int num_tri = cdt_get_triangle_count(&engine->navmesh);
 
+
+            // Get all triangles in the subdivision. @Note: Stupid..
+            //
+            int num_tri = cdt_get_triangle_count(&engine->navmesh);
+            cdt_triangle *triangles = (cdt_triangle *)malloc(sizeof(cdt_triangle)*num_tri);
+            {
+                cdt_quad_edge **quad_edge_visited = 0;
+
+                // It's just DFS.
+                cdt_quad_edge_array stk = {0};
+                cdt_quad_edge_array_push(&stk, &engine->navmesh.edges.data[0]->e[0]);
+                int idx = 0;
+                while (stk.num > 0) {
+                    cdt_quad_edge *e1 = cdt_stack_pop(&stk);
+                    cdt_quad_edge *e2 = cdt_lnext(e1);
+                    cdt_quad_edge *e3 = cdt_lnext(e2);
+
+                    int skip = 0;
+                    for (int i = 0; i < arrlen(quad_edge_visited); ++i) {
+                        if (quad_edge_visited[i]==e1) {
+                            skip = 1;
+                            break;
+                        }
+                    }
+                    if (skip) { continue; }
+
+                    arrput(quad_edge_visited, e1);
+                    arrput(quad_edge_visited, e2);
+                    arrput(quad_edge_visited, e3);
+
+                    cdt_triangle *tri = &triangles[idx];
+                    tri->edges[0] = e1;
+                    tri->x[0]     = e1->org->pos.x;
+                    tri->y[0]     = e1->org->pos.y;
+                    tri->edges[1] = e2;
+                    tri->x[1]     = e2->org->pos.x;
+                    tri->y[1]     = e2->org->pos.y;
+                    tri->edges[2] = e3;
+                    tri->x[2]     = e3->org->pos.x;
+                    tri->y[2]     = e3->org->pos.y;
+                    idx++;
+
+                    cdt_quad_edge_array_push(&stk, cdt_sym(e1));
+                    cdt_quad_edge_array_push(&stk, cdt_sym(e2));
+                    cdt_quad_edge_array_push(&stk, cdt_sym(e3));
+                }
+                assert(idx == num_tri);
+                arrfree(quad_edge_visited);
+            }
 
             // A*
             //
-            //dist;
-            //fill(dist, INF);
-            //dist[src_tri] = 0.f;
-
-            //Vec2 src_center; {
-            //    src_center.x = (src_tri.x[0] + src_tri.x[1] + src_tri.x[2]) * 0.333333f;
-            //    src_center.y = (src_tri.y[0] + src_tri.y[1] + src_tri.y[2]) * 0.333333f;
-            //}
-            //Vec2 dst_center; {
-            //    dst_center.x = (dst_tri.x[0] + dst_tri.x[1] + dst_tri.x[2]) * 0.333333f;
-            //    dst_center.y = (dst_tri.y[0] + dst_tri.y[1] + dst_tri.y[2]) * 0.333333f;
-            //}
-
-            //struct {
-            //    f32 w;
-            //    cdt_triangle tri;
-            //} Weight_Tri;
-
-            //while (!pq.empty()) {
-            //    Weight_Tri weight_tri = pq.pop();
-            //    f32 weight = weight_tri.w;
-            //    cdt_triangle tri = weight_tri.tri;
-
-            //    cdt_triangles adj = cdt_get_adjacent_triangles(tri);
-            //    for (int i = 0; i < 3; ++i) {
-            //        cdt_triangle adj_tri = adj.triangles[i];
-            //        Vec2 adj_center; {
-            //            adj_center.x = (adj_tri.x[0] + adj_tri.x[1] + adj_tri.x[2]) * 0.333333f;
-            //            adj_center.y = (adj_tri.y[0] + adj_tri.y[1] + adj_tri.y[2]) * 0.333333f;
-            //        }
-
-            //        f32 new_dist = dist[tri] + distv2(tri_center, adj_center);
-            //        if (dist[adj_center] > new_dist) {
-            //            dist[adj_center] = new_dist;
-            //            pq.push({new_dist, adj});
-            //        }
-            //    }
-            //}
-
-
-
-
-            { // @Temporary
-                {
-                    Vec2 v[] = {
-                        litv2(src_tri.x[0], src_tri.y[0]),
-                        litv2(src_tri.x[1], src_tri.y[1]),
-                        litv2(src_tri.x[2], src_tri.y[2]),
-                    };
-
-                    glUseProgram(engine->simple_shader);
-                    glEnableVertexAttribArray(0);
-                    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-                    {
-                        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(Vec2), 0);
-                        glBufferData(GL_ARRAY_BUFFER, sizeof(v), v, GL_DYNAMIC_DRAW);
-
-                        glUniform4f(engine->simple_shader_color, 1.f, 0.f, 1.0f, 1.0f);
-                        M4x4 view_proj = m4x4_view_proj(engine->camera_position, engine->resolution);
-                        glUniformMatrix4fv(engine->simple_shader_vp, 1, GL_TRUE, &view_proj.e[0][0]);
-
-                        glDrawArrays(GL_TRIANGLES, 0, 3);
-                    }
-                    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-                    glDisableVertexAttribArray(0);
-                    glUseProgram(0);
+            {
+                // Preprocess
+                f32 unreachable = F32_MAX;
+                f32 *dist = (f32 *)malloc(sizeof(f32)*num_tri);
+                int *from_idx = (int *)malloc(sizeof(int)*num_tri);
+                int src_idx = -1;
+                int dst_idx = -1;
+                for (int i = 0; i < num_tri; ++i) {
+                    dist[i] = unreachable; 
+                    from_idx[i] = i;
                 }
-                {
-                    Vec2 v[] = {
-                        litv2(dst_tri.x[0], dst_tri.y[0]),
-                        litv2(dst_tri.x[1], dst_tri.y[1]),
-                        litv2(dst_tri.x[2], dst_tri.y[2]),
-                    };
 
-                    glUseProgram(engine->simple_shader);
-                    glEnableVertexAttribArray(0);
-                    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+                for (int i = 0; i < num_tri; ++i) {
+                    if (triangles[i].edges[0] == src_tri.edges[0] ||
+                        triangles[i].edges[1] == src_tri.edges[0] ||
+                        triangles[i].edges[2] == src_tri.edges[0]) 
                     {
-                        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(Vec2), 0);
-                        glBufferData(GL_ARRAY_BUFFER, sizeof(v), v, GL_DYNAMIC_DRAW);
-
-                        glUniform4f(engine->simple_shader_color, 0.f, 1.f, 1.0f, 1.0f);
-                        M4x4 view_proj = m4x4_view_proj(engine->camera_position, engine->resolution);
-                        glUniformMatrix4fv(engine->simple_shader_vp, 1, GL_TRUE, &view_proj.e[0][0]);
-
-                        glDrawArrays(GL_TRIANGLES, 0, 3);
+                        src_idx = i;
+                        dist[i] = 0.f;
+                        break;
                     }
-                    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-                    glDisableVertexAttribArray(0);
-                    glUseProgram(0);
                 }
+                from_idx[src_idx] = -1;
+
+                for (int i = 0; i < num_tri; ++i) {
+                    if (triangles[i].edges[0] == dst_tri.edges[0] ||
+                        triangles[i].edges[1] == dst_tri.edges[0] ||
+                        triangles[i].edges[2] == dst_tri.edges[0]) 
+                    {
+                        dst_idx = i;
+                    }
+                }
+                assert(src_idx != -1 && dst_idx != -1);
+
+                Priority_Queue pq = {0};
+                Index_Dist first = {0}; {
+                    first.index = src_idx;
+                    first.dist = 0.f;
+                }
+                enqueue(&pq, first);
+
+
+                Vec2 dst_center = litvec2((dst_tri.x[0] + dst_tri.x[1] + dst_tri.x[2]) * 0.333333f, 
+                                          (dst_tri.y[0] + dst_tri.y[1] + dst_tri.y[2]) * 0.333333f);
+
+
+                while (pq.size > 0) {
+                    Index_Dist index_dist = dequeue(&pq);
+                    int tri_idx = index_dist.index;
+                    f32 current_dist = index_dist.dist;
+
+                    if (tri_idx == dst_idx) {
+                        break; 
+                    }
+
+                    if (current_dist > dist[tri_idx]) {
+                        continue;
+                    }
+
+                    cdt_triangle tri = triangles[tri_idx];
+                    Vec2 tri_center = litvec2((tri.x[0] + tri.x[1] + tri.x[2]) * 0.333333f,
+                                            (tri.y[0] + tri.y[1] + tri.y[2]) * 0.333333f);
+
+                    // @Todo: Broken heuristics
+                    cdt_triangles adj = cdt_get_adjacent_triangles(tri);
+                    for (int i = 0; i < 3; ++i) {
+                        cdt_triangle adj_tri = adj.triangles[i];
+                        if (!cdt_is_constrained(cdt_get_edge(adj_tri.edges[0]))) {
+                            int adj_idx = -1;
+                            for (int j = 0; j < num_tri; ++j) {
+                                if (triangles[j].edges[0] == adj_tri.edges[0] ||
+                                    triangles[j].edges[1] == adj_tri.edges[0] ||
+                                    triangles[j].edges[2] == adj_tri.edges[0]) 
+                                {
+                                    adj_idx = j;
+                                }
+                            }
+                            assert(adj_idx != -1);
+
+                            Vec2 adj_center = litvec2((adj_tri.x[0] + adj_tri.x[1] + adj_tri.x[2]) * 0.333333f,
+                                                    (adj_tri.y[0] + adj_tri.y[1] + adj_tri.y[2]) * 0.333333f);
+
+                            f32 new_dist = dist[tri_idx] + distv2(tri_center, adj_center) + distv2(adj_center, dst_center);
+                            if (dist[adj_idx] > new_dist) {
+                                from_idx[adj_idx] = tri_idx;
+                                dist[adj_idx] = new_dist;
+
+                                Index_Dist new_entry = {0}; {
+                                    new_entry.index = adj_idx;
+                                    new_entry.dist  = new_dist;
+                                }
+                                enqueue(&pq, new_entry);
+                            }
+                        }
+                    }
+                }
+
+
+                // Trace
+                if (dist[dst_idx] != unreachable) {
+                    stack_clear(&entity->path_stack);
+                    stack_clear(&entity->path_shadow_stack);
+                    entity->triangles_in_path.clear();
+
+                    entity->triangles_in_path.push({src_tri.x[0], src_tri.y[0]});
+                    entity->triangles_in_path.push({src_tri.x[1], src_tri.y[1]});
+                    entity->triangles_in_path.push({src_tri.x[2], src_tri.y[2]});
+
+                    stack_push(&entity->path_stack, litvec2(dst_x, dst_y));
+                    if (src_idx != dst_idx) {
+                        for (int t = from_idx[dst_idx]; t != src_idx; t = from_idx[t]) {
+                            cdt_triangle tri = triangles[t];
+                            Vec2 tri_cen = litvec2((tri.x[0] + tri.x[1] + tri.x[2]) * 0.333333f,
+                                                   (tri.y[0] + tri.y[1] + tri.y[2]) * 0.333333f);
+
+                            stack_push(&entity->path_stack, tri_cen);
+                            entity->triangles_in_path.push({tri.x[0], tri.y[0]});
+                            entity->triangles_in_path.push({tri.x[1], tri.y[1]});
+                            entity->triangles_in_path.push({tri.x[2], tri.y[2]});
+                        }
+
+
+                        stack_push(&entity->path_stack, entity->position);
+                        entity->triangles_in_path.push({dst_tri.x[0], dst_tri.y[0]});
+                        entity->triangles_in_path.push({dst_tri.x[1], dst_tri.y[1]});
+                        entity->triangles_in_path.push({dst_tri.x[2], dst_tri.y[2]});
+                    }
+                    entity->order_position = entity->position;
+
+                    // Copy to debug-purpose path shadow stack.
+                    for (int i = entity->path_stack.top - 1; i >= 0; --i) {
+                        stack_push(&entity->path_shadow_stack, entity->path_stack.data[i]);
+                    }
+                }
+
+
+                // Cleanup
+                free(dist);
+                free(from_idx);
             }
- 
-            
-
-
 
             entity->order = ORDER_TYPE_MOVE;
-            entity->order_position = litv2((f32)x,(f32)y);
 
 
             // Cleanup
             //
-            //free(dist);
+            free(triangles);
         }
     }
 
@@ -275,21 +368,26 @@ void engine_update_entity(Entity *entity) {
         } break;
 
         case ORDER_TYPE_MOVE: {
-            f32 threshold = 1.0f;
-            if (distv2(entity->order_position, entity->position) < threshold) {
-                entity->order = ORDER_TYPE_IDLE;
+            f32 eps = 1.f;
+            if (distv2(entity->position, entity->order_position) < eps) {
+                if (!stack_empty(&entity->path_stack)) {
+                    entity->order_position = stack_pop(&entity->path_stack);
+                } else {
+                    entity->order = ORDER_TYPE_IDLE;
+                    entity->triangles_in_path.clear();
+                }
             } else {
-                Vec2 dir = normv2(subv2(entity->order_position, entity->position));
-                Vec2 amount = mulv2f32(dir, dt*entity->speed);
-                entity->position = addv2(entity->position, amount);
+                Vec2 dir = normv2(entity->order_position - entity->position);
+                Vec2 amount = dir * dt*entity->speed;
+                entity->position = entity->position + amount;
 
                 if (entity->order_position.x - entity->position.x < 0.f) {
                     entity->flags |= ENTITY_FLAG_FLIP_TEX_U;
                 } else {
                     entity->flags &= ~ENTITY_FLAG_FLIP_TEX_U;
                 }
-            } break;
-        }
+            }
+        } break;
 
         case ORDER_TYPE_DIE: {
         } break;
@@ -331,6 +429,17 @@ void engine_update_entity(Entity *entity) {
     }
 }
 
+void draw_push_colored_vertex(f32 x, f32 y, f32 z, Vec4 color) {
+    Colored_Vertex vert = {0}; {
+        vert.position.x = x;
+        vert.position.y = y;
+        vert.position.z = z; 
+        vert.color      = color;
+    }
+    engine->line_shader_buffer.push(vert);
+
+}
+
 void engine_draw_entity(Entity *entity) {
     if (!entity->flags & ENTITY_FLAG_DRAW) {
         return;
@@ -363,7 +472,7 @@ void engine_draw_entity(Entity *entity) {
 
             M4x4 view      = m4x4_view(engine->camera_position);
             M4x4 proj      = m4x4_proj(engine->resolution);
-            M4x4 view_proj = m4x4_mul(proj, view);
+            M4x4 view_proj = proj*view;
             glUniformMatrix4fv(engine->sprite_shader_vp, 1, GL_TRUE, &view_proj.e[0][0]);
 
             glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
@@ -373,4 +482,32 @@ void engine_draw_entity(Entity *entity) {
         glDisableVertexAttribArray(1);
         glUseProgram(0);
     }
+
+    if (!entity->triangles_in_path.empty()) {
+        for (int i = 0; i < entity->triangles_in_path.count; i+=3) {
+            for (int j = 0; j < 3; ++j) {
+                int d[] = {1, 1,-2};
+                int k = j + d[j];
+                int idx1 = i+j;
+                int idx2 = i+k;
+
+                draw_push_colored_vertex(entity->triangles_in_path[idx1].x, entity->triangles_in_path[idx1].y, 0.1f, Vec4{1,1,1,1});
+                draw_push_colored_vertex(entity->triangles_in_path[idx2].x, entity->triangles_in_path[idx2].y, 0.1f, Vec4{1,1,1,1});
+            }
+        }
+    }
+
+    // Draw actual route
+    //
+    if (!stack_empty(&entity->path_stack)) {
+        for (int i = entity->path_shadow_stack.top - 1; i > 0; --i) {
+            int j = i - 1;
+            Vec2 p1 = entity->path_shadow_stack.data[i];
+            Vec2 p2 = entity->path_shadow_stack.data[j];
+
+            draw_push_colored_vertex(p1.x, p1.y, 0.f, Vec4{0,0,1,1});
+            draw_push_colored_vertex(p2.x, p2.y, 0.f, Vec4{0,0,1,1});
+        }
+    }
+
 }

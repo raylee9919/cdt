@@ -12,32 +12,20 @@ f32 lerp(f32 a, f32 b, f32 t) {
     return a*t + b*(1.f-t);
 }
 
-Vec2 litv2(f32 x, f32 y) {
-    Vec2 result;
-    result.x = x;
-    result.y = y;
-    return result;
+Vec2 litvec2(f32 x, f32 y) {
+    return {x, y};
 }
 
-Vec2 addv2(Vec2 a, Vec2 b) {
-    Vec2 result;
-    result.x = a.x + b.x;
-    result.y = a.y + b.y;
-    return result;
+Vec2 operator +(Vec2 a, Vec2 b) {
+    return {a.x+b.x, a.y+b.y};
 }
 
-Vec2 subv2(Vec2 a, Vec2 b) {
-    Vec2 result;
-    result.x = a.x - b.x;
-    result.y = a.y - b.y;
-    return result;
+Vec2 operator -(Vec2 a, Vec2 b) {
+    return {a.x-b.x, a.y-b.y};
 }
 
-Vec2 mulv2f32(Vec2 a, f32 b) {
-    Vec2 result;
-    result.x = a.x*b;
-    result.y = a.y*b;
-    return result;
+Vec2 operator *(Vec2 a, f32 b) {
+    return {a.x*b, a.y*b};
 }
 
 f32 lenv2(Vec2 v) {
@@ -45,7 +33,7 @@ f32 lenv2(Vec2 v) {
 }
 
 f32 distv2(Vec2 a, Vec2 b) {
-    return lenv2(subv2(a,b));
+    return lenv2(a - b);
 }
 
 Vec2 normv2(Vec2 v) {
@@ -69,7 +57,7 @@ M4x4 m4x4_identity(void) {
     return result;
 }
 
-M4x4 m4x4_mul(M4x4 a, M4x4 b) {
+M4x4 operator *(M4x4 a, M4x4 b) {
     M4x4 R = {0};
     for (int r = 0; r < 4; ++r) {
         for (int c = 0; c < 4; ++c) {
@@ -120,5 +108,5 @@ M4x4 m4x4_proj(Vec2 resolution) {
 }
 
 M4x4 m4x4_view_proj(Vec2 camera_position, Vec2 resolution) {
-    return m4x4_mul(m4x4_proj(resolution), m4x4_view(camera_position));
+    return m4x4_proj(resolution)*m4x4_view(camera_position);
 }

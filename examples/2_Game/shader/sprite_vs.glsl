@@ -6,5 +6,5 @@
 "  out vec2 f_uv;\n"
 "  void main() {\n"
 "      f_uv = v_uv;\n"
-"      gl_Position = vp * model * vec4(v_pos, 0, 1);\n"
+"      gl_Position = vp * model * vec4(v_pos, 1.f, 1.f);\n"
 "  }";

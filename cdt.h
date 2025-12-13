@@ -49,6 +49,8 @@
        
 */
 
+// @Todo: Remove realloc
+
 #include <stdint.h>
 #include <math.h>
 #include <string.h>
@@ -56,6 +58,7 @@
 typedef float         cdt_f32;
 typedef unsigned int  cdt_id;
 #define cdt_assert(exp) if (!(exp)) {*(volatile int*)0=0;}
+#define CDT_STATIC static
 
 #ifdef __cplusplus
 extern "C" {
@@ -1066,7 +1069,7 @@ cdt_triangles cdt_get_adjacent_triangles(cdt_triangle triangle) {
     for (int i = 0; i < 3; ++i) {
         cdt_triangle *tri = result.triangles + i;
         {
-            tri->edges[0] = cdt_sym(triangle.edges[0]);
+            tri->edges[0] = cdt_sym(triangle.edges[i]);
             tri->edges[1] = cdt_lnext(tri->edges[0]);
             tri->edges[2] = cdt_lnext(tri->edges[1]);
             tri->x[0] = tri->edges[0]->org->pos.x;

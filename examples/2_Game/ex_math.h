@@ -19,13 +19,21 @@ typedef uint64_t    u64;
 typedef float       f32; 
 typedef double      f64; 
 
-typedef struct {
-    f32 x, y;
-} Vec2;
+struct Vec2 {
+    f32 x,y;
+};
 
-typedef struct {
-    float e[4][4];
-} M4x4;
+struct Vec3 {
+    f32 x,y,z;
+};
+
+struct Vec4 {
+    f32 r,g,b,a;
+};
+
+struct M4x4 {
+    f32 e[4][4];
+};
 
 #define F32_MAX ( 3.402823e+38f)
 #define F32_MIN (-3.402823e+38f)

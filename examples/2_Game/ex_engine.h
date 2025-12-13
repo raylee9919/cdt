@@ -8,10 +8,15 @@
 
    ======================================================================== */
 
-typedef struct {
+struct Sprite_Vertex {
     Vec2 position;
     Vec2 uv;
-} Sprite_Vertex;
+};
+
+struct Colored_Vertex {
+    Vec3 position;
+    Vec4 color;
+};
 
 typedef u32 Texture_Type;
 enum {
@@ -23,7 +28,7 @@ enum {
     TEXTURE_TYPE_COUNT
 };
 
-typedef struct {
+struct Texture {
     Texture_Type type;
     GLuint       gl_id;
     u16          width;
@@ -32,14 +37,14 @@ typedef struct {
     u16          sprite_height;
     u16          num_row;
     u16          num_col;
-} Texture;
+};
 
-typedef struct {
+struct Animation {
     Texture_Type spritesheet;
     u32 start_frame_index;
     u32 num_frames;
     f32 frame_interval;
-} Animation;
+};
 
 typedef u32 Order_Type;
 enum {
@@ -79,7 +84,6 @@ enum {
     ENTITY_FLAG_DIEABLE         = 0x10,
 };
 
-typedef struct Entity Entity;
 struct Entity {
     Entity         *next;
     Entity         *prev;
@@ -100,47 +104,53 @@ struct Entity {
     // Order
     Order_Type      order;
     Vec2            order_position;
+    Stack<Vec2>     path_stack;
+    Stack<Vec2>     path_shadow_stack;
+    
 
     // Animation
     f32 animation_t;
     u32 animation_frame_offset;
 
-    Vec2           *navmesh;
+    // Navigation
+    Vec2       *navmesh;
+    Array<Vec2> triangles_in_path;
 
     // Draw
     f32 u1, v1, u2, v2;
-
 };
 
-typedef struct {
+struct Engine {
     GLFWwindow *window;
-    int         framebuffer_width;
-    int         framebuffer_height;
+    int framebuffer_width;
+    int framebuffer_height;
 
-    u64     tick;
-    f64     last_frame_time;
-    f32     dt;
-    f32     shader_time;
-    Vec2    resolution;
+    u64  tick;
+    f64  last_frame_time;
+    f32  dt;
+    f32  shader_time;
+    Vec2 resolution;
 
-    u32     next_entity_id;
+    u32 next_entity_id;
     Entity *entity_sentinel;
 
     cdt_context navmesh;
 
-    Vec2    camera_position;
+    Vec2 camera_position;
 
     Texture textures[TEXTURE_TYPE_COUNT];
     Animation animations[ANIMATION_TYPE_COUNT];
     Animation_Type animation_map[TEXTURE_TYPE_COUNT][ORDER_TYPE_COUNT];
 
-    GLuint  sprite_shader;
-    GLuint  sprite_shader_model;
-    GLuint  sprite_shader_vp;
+    GLuint sprite_shader;
+    GLuint sprite_shader_model;
+    GLuint sprite_shader_vp;
 
     GLuint simple_shader;
     GLuint simple_shader_vp;
     GLuint simple_shader_color;
-} Engine;
+
+    Array<Colored_Vertex> line_shader_buffer;
+};
 
 static Engine *engine;

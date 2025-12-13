@@ -9,6 +9,6 @@ pushd build
 call cl /nologo /Od /Z7 /W4 /D_CRT_SECURE_NO_WARNINGS ..\examples\1_Interactive\main.c /Fe:example_interactive.exe /link /incremental:no /opt:ref glad.obj glfw3dll.lib glew32.lib
 
 :: Example 2. Game ::
-call cl /nologo /Od /Z7 /W4 /D_CRT_SECURE_NO_WARNINGS ..\examples\2_Game\main.c /Fe:example_game.exe /link /incremental:no /opt:ref glad.obj glfw3dll.lib glew32.lib
+call cl /nologo /Od /std:c++14 /Z7 /W4 /D_CRT_SECURE_NO_WARNINGS ..\examples\2_Game\main.cpp /Fe:example_game.exe /link /incremental:no /opt:ref glad.obj glfw3dll.lib glew32.lib
 
 popd

@@ -26,6 +26,7 @@
 #include "../vendor/GLFW/glfw3.h"
 #include "../../cdt.h"
 #include "ex_math.h"
+#include "ex_shape.h"
 #include "ex_gl.h"
 #include "ex_log.h"
 
@@ -36,6 +37,8 @@
 #include "ex_log.c"
 
 
+// Globals. Who cares?
+//
 #define RESOLUTION_X 1920
 #define RESOLUTION_Y 1080
 int FRAMEBUFFER_X;
@@ -45,31 +48,20 @@ cdt_context *ctx;
 FILE *insert_log_file;
 f32 polygon_scale = 10.f;
 cdt_id next_gen_id = 1;
-
 f32 scale = 1.f;
 #define MIN_SCALE  1.f
-#define MAX_SCALE 10.f
-
-f32 g_points[][2] = {
-    { 0.59607f,  0.80293f},
-    { 0.00393f,  0.38195f},
-    {-0.57943f,  0.81502f},
-    {-0.36204f,  0.12176f},
-    {-0.95418f, -0.29922f},
-    {-0.22768f, -0.30669f},
-    {-0.01028f, -0.99995f},
-    { 0.22132f, -0.31131f},
-    { 0.94783f, -0.31878f},
-    { 0.36447f,  0.11429f},
-};
+#define MAX_SCALE 50.f
 cdt_id *constraints;
 Vec2 camera_position;
 int mouse_middle_down;
 int mouse_middle_toggled;
 f64 mouse_middle_last_down_x;
 f64 mouse_middle_last_down_y;
+Shape_Set *shapes;
 
 
+// FD.
+//
 void demo_cdt_insert_with_log(f32 x1, f32 y1, f32 x2, f32 y2);
 void demo_cdt_insert(GLFWwindow *window, f32 x, f32 y);
 void callback_mouse_button(GLFWwindow *window, int button, int action, int mods);
@@ -79,6 +71,8 @@ void callback_drop_down(GLFWwindow *window, int count, const char **paths);
 Vec2 screen_to_world_space(f64 x, f64 y);
 
 int main(void) {
+    // GLFW Init.
+    //
     glfwSetErrorCallback(glfw_error_callback);
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -86,6 +80,7 @@ int main(void) {
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     g_window = glfwCreateWindow(RESOLUTION_X, RESOLUTION_Y, "WASD move | MOUSE insert | DEL remove the oldest", 0, 0);
+    glfwSetWindowSize(g_window, RESOLUTION_X, RESOLUTION_Y);
     glfwMakeContextCurrent(g_window);
     glfwSetKeyCallback(g_window, callback_key);
     glfwSetMouseButtonCallback(g_window, callback_mouse_button);
@@ -115,19 +110,21 @@ int main(void) {
     GLuint simple_shader_color = glad_glGetUniformLocation(simple_shader, "color");
 
 
+    // Init shape set.
+    //
+    shapes = (Shape_Set *)malloc(sizeof(Shape_Set));
+    shape_set_init(shapes);
 
+
+
+    // CDT Init.
+    //
     ctx = malloc(sizeof(cdt_context));
     cdt_init(ctx, 0.f, 2048.f, -2048.f, -2048.f, 2048.f, -2048.f);
-
-
-    cdt_vec2 *edge_end_points = 0;
-    int *is_constrained = 0;
-
-
     
 
-#if 1
-    // Log
+    // Open a log file.
+    //
     char log_file_name[64];
     time_t now = time(0);
     strftime(log_file_name, sizeof(log_file_name), "%Y_%m_%d_%H%M%S.log", localtime(&now));
@@ -140,17 +137,27 @@ int main(void) {
         // the process is terminated in a debugger. ..or does it?
         setvbuf(insert_log_file, 0, _IONBF, 0);
     }
-#endif
+
 
 
     f64 old_frame_time = glfwGetTime();
-    glfwSetWindowSize(g_window, RESOLUTION_X, RESOLUTION_Y);
+    cdt_vec2 *edge_end_points = 0;
+    int *is_constrained = 0;
+
+
+
+    // Main loop
+    //
     while (!glfwWindowShouldClose(g_window)) {
+        // Compute delta-time.
         f64 new_frame_time = glfwGetTime();
         f32 dt = (f32)(new_frame_time - old_frame_time);
         old_frame_time = new_frame_time;
 
+        // Clear
         mouse_middle_toggled = 0;
+        arrsetlen(edge_end_points, 0);
+        arrsetlen(is_constrained, 0);
 
         glfwPollEvents();
         glfwGetFramebufferSize(g_window, &FRAMEBUFFER_X, &FRAMEBUFFER_Y);
@@ -187,12 +194,9 @@ int main(void) {
             mouse_middle_last_down_y = my;
         }
 
+        
 
 
-
-        // Clear
-        arrsetlen(edge_end_points, 0);
-        arrsetlen(is_constrained, 0);
 
         glClearColor(0.05f,0.05f,0.05f,1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
@@ -201,7 +205,7 @@ int main(void) {
         glClear(GL_DEPTH_BUFFER_BIT);
 
 
-        // Draw navmesh
+        // Draw triangulated subdivision.
         //
         for (int i = 0; i < ctx->edges.num; i+= 1) {
             cdt_edge *e = ctx->edges.data[i];
@@ -222,11 +226,14 @@ int main(void) {
             f32 mx = (f32)wp.x;
             f32 my = (f32)wp.y;
 
-            for (int i = 0; i < arrcnt(g_points); ++i) {
-                f32 x1 = scale*polygon_scale*g_points[i][0];
-                f32 y1 = scale*polygon_scale*g_points[i][1];
-                f32 x2 = scale*polygon_scale*g_points[(i+1)%arrcnt(g_points)][0];
-                f32 y2 = scale*polygon_scale*g_points[(i+1)%arrcnt(g_points)][1];
+            int num_pt = shapes->num_points[shapes->current_type];
+            f32 (*points)[2] = shapes->points[shapes->current_type];
+
+            for (int i = 0; i < num_pt; ++i) {
+                f32 x1 = scale*polygon_scale*points[i][0];
+                f32 y1 = scale*polygon_scale*points[i][1];
+                f32 x2 = scale*polygon_scale*points[(i+1)%num_pt][0];
+                f32 y2 = scale*polygon_scale*points[(i+1)%num_pt][1];
                 cdt_vec2 p1 = {mx+x1,my+y1};
                 cdt_vec2 p2 = {mx+x2,my+y2};
                 arrput(edge_end_points, p1);
@@ -279,24 +286,27 @@ void demo_cdt_insert_with_log(f32 x1, f32 y1, f32 x2, f32 y2) {
 void demo_cdt_insert(GLFWwindow *window, f32 x, f32 y) {
     COMPILER_UNREFERENCED(window);
 
+    int num_pt = shapes->num_points[shapes->current_type];
+    f32 (*points)[2] = shapes->points[shapes->current_type];
+
     f32 final_scale = scale * polygon_scale;
 
     // Log first.
-    for (int i = 0; i < arrcnt(g_points); i += 1) {
-        f32 x1 = x + final_scale*g_points[i][0];
-        f32 y1 = y + final_scale*g_points[i][1];
-        f32 x2 = x + final_scale*g_points[(i+1)%arrcnt(g_points)][0];
-        f32 y2 = y + final_scale*g_points[(i+1)%arrcnt(g_points)][1];
+    for (int i = 0; i < num_pt; i += 1) {
+        f32 x1 = x + final_scale*points[i][0];
+        f32 y1 = y + final_scale*points[i][1];
+        f32 x2 = x + final_scale*points[(i+1)%num_pt][0];
+        f32 y2 = y + final_scale*points[(i+1)%num_pt][1];
         fprintf(insert_log_file, "0x%08X 0x%08X 0x%08X 0x%08X\n", *((u32 *)&x1), *((u32 *)&y1), *((u32 *)&x2), *((u32 *)&y2));
     }
     fprintf(insert_log_file, ";\n");
 
     // Insert afterwards.
-    for (int i = 0; i < arrcnt(g_points); i += 1) {
-        f32 x1 = x + final_scale*g_points[i][0];
-        f32 y1 = y + final_scale*g_points[i][1];
-        f32 x2 = x + final_scale*g_points[(i+1)%arrcnt(g_points)][0];
-        f32 y2 = y + final_scale*g_points[(i+1)%arrcnt(g_points)][1];
+    for (int i = 0; i < num_pt; i += 1) {
+        f32 x1 = x + final_scale*points[i][0];
+        f32 y1 = y + final_scale*points[i][1];
+        f32 x2 = x + final_scale*points[(i+1)%num_pt][0];
+        f32 y2 = y + final_scale*points[(i+1)%num_pt][1];
         cdt_insert(ctx, next_gen_id, x1, y1, x2, y2);
     }
 
@@ -336,10 +346,10 @@ void callback_scroll(GLFWwindow *window, double xoffset, double yoffset) {
     COMPILER_UNREFERENCED(xoffset);
 
     if (yoffset > 0.f) {
-        scale += 1.f;
+        scale += 0.5f;
         scale = min(MAX_SCALE, scale);
     } else if (yoffset < 0.f) {
-        scale -= 1.f;
+        scale -= 0.5f;
         scale = max(MIN_SCALE, scale);
     }
 }
@@ -354,6 +364,11 @@ void callback_key(GLFWwindow* window, int key, int scancode, int action, int mod
         cdt_remove(ctx, id);
         arrdeln(constraints, 0, 1);
     }
+
+    if (key == GLFW_KEY_TAB && action == GLFW_PRESS) {
+        shapes->current_type = (shapes->current_type + 1) % SHAPE_COUNT;
+    }
+
 }
 
 void callback_drop_down(GLFWwindow *window, int count, const char **paths) {
