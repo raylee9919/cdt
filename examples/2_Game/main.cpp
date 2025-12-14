@@ -20,8 +20,10 @@
 // [.h]
 //
 #define STB_DS_IMPLEMENTATION
+#define STB_SPRINTF_IMPLEMENTATION
 #define STBDS_ASSERT assert
 #include "../vendor/stb/stb_ds.h"
+#include "../vendor/stb/stb_sprintf.h"
 #include "../vendor/glad/glad.h"
 #include "../vendor/GLFW/glfw3.h"
 #include "../../cdt.h"
@@ -49,9 +51,8 @@ int main(void) {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    GLFWwindow *window = glfwCreateWindow(1920, 1080, "CDT Game", 0, 0);
+    GLFWwindow *window = glfwCreateWindow(1920, 1080, "Game", 0, 0);
     glfwMakeContextCurrent(window);
-
 
     gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
 
@@ -90,25 +91,33 @@ int main(void) {
     cdt_init(&engine->navmesh, 0, 4096.f, -4096.f, -4096.f, 4096.f, -4096.f);
 
     Entity *ground = engine_alloc_entity(ENTITY_FLAG_DRAW); {
-        ground->size    = litvec2(1024.f, 1024.f);
+        f32 dim = 1024.f;
+        f32 uv_repeat = 16.f;
+        ground->size = vec2(dim, dim);
         ground->texture = TEXTURE_TYPE_GROUND;
-        ground->u1 = 0.f; ground->v1 = 0.f;
-        ground->u2 = 16.f; ground->v2 = 16.f;
+        ground->u1 = 0.f;
+        ground->v1 = 0.f;
+        ground->u2 = uv_repeat;
+        ground->v2 = uv_repeat;
+        cdt_insert(&engine->navmesh, ground->id, -dim,  dim, -dim, -dim);
+        cdt_insert(&engine->navmesh, ground->id, -dim, -dim,  dim, -dim);
+        cdt_insert(&engine->navmesh, ground->id,  dim, -dim,  dim,  dim);
+        cdt_insert(&engine->navmesh, ground->id,  dim,  dim, -dim,  dim);
     }
 
     for (int r = 0; r < 4; ++r) {
         for (int c = 0; c < 4; ++c) {
             Entity *building   = engine_alloc_entity(ENTITY_FLAG_DRAW);
-            building->position = litvec2(-400.f+(270.f+r*10.f)*c, -400.f+(270.f-c*12.f)*r);
-            building->size     = litvec2(SPRITE_BUILDING_WIDTH, SPRITE_BUILDING_HEIGHT);
+            building->position = vec2(-400.f+(270.f+r*10.f)*c, -400.f+(270.f-c*12.f)*r);
+            building->size     = vec2(SPRITE_BUILDING_WIDTH, SPRITE_BUILDING_HEIGHT);
             building->texture  = TEXTURE_TYPE_BUILDING;
-            building->offset   = litvec2(0.f, -72.f);
-            arrput(building->navmesh, litvec2(  0.f,-120.f));
-            arrput(building->navmesh, litvec2(-85.f,-100.f));
-            arrput(building->navmesh, litvec2(-85.f,  10.f));
-            arrput(building->navmesh, litvec2(-10.f,  40.f));
-            arrput(building->navmesh, litvec2( 85.f,  10.f));
-            arrput(building->navmesh, litvec2( 85.f,-100.f));
+            building->offset   = vec2(0.f, -72.f);
+            arrput(building->navmesh, vec2(  0.f,-120.f));
+            arrput(building->navmesh, vec2(-85.f,-100.f));
+            arrput(building->navmesh, vec2(-85.f,  10.f));
+            arrput(building->navmesh, vec2(-10.f,  40.f));
+            arrput(building->navmesh, vec2( 85.f,  10.f));
+            arrput(building->navmesh, vec2( 85.f,-100.f));
             for (int i = 0 ; i < arrlen(building->navmesh); ++i) {
                 int j = (i+1)%arrlen(building->navmesh);
                 cdt_insert(&engine->navmesh, building->id, 
@@ -118,28 +127,30 @@ int main(void) {
         }
     }
 
-    Entity *player = engine_alloc_entity(ENTITY_FLAG_DRAW|ENTITY_FLAG_ANIMATE|
-                                         ENTITY_FLAG_MOUSE_CONTROL|ENTITY_FLAG_DIEABLE); 
+    Entity *player = engine_alloc_entity(ENTITY_FLAG_DRAW|
+                                         ENTITY_FLAG_ANIMATE|
+                                         ENTITY_FLAG_MOUSE_CONTROL|
+                                         ENTITY_FLAG_DIEABLE); 
     {
-        player->position = litvec2( 0.f,  0.f);
-        player->size     = litvec2(SPRITE_PLAYER_WIDTH, SPRITE_PLAYER_HEIGHT);
-        player->radius   = 8.f;
-        player->speed    = 150.0f;
+        player->position = vec2( 0.f,  0.f);
+        player->size     = vec2(SPRITE_PLAYER_WIDTH, SPRITE_PLAYER_HEIGHT);
+        player->radius   = 10.f;
+        player->speed    = 250.0f;
         player->hp       = 100.f;
         player->texture  = TEXTURE_TYPE_PLAYER;
-        player->offset   = litvec2(0.f, -18.f);
+        player->offset   = vec2(0.f, -18.f);
         player->order    = ORDER_TYPE_IDLE;
     }
 
     {
         Entity *skeleton = engine_alloc_entity(ENTITY_FLAG_DRAW|ENTITY_FLAG_ANIMATE|ENTITY_FLAG_DIEABLE); 
-        skeleton->position = litvec2( 0.f, 80.f);
-        skeleton->size     = litvec2(SPRITE_SKELETON_WIDTH, SPRITE_SKELETON_HEIGHT);
+        skeleton->position = vec2( 0.f, 80.f);
+        skeleton->size     = vec2(SPRITE_SKELETON_WIDTH, SPRITE_SKELETON_HEIGHT);
         skeleton->radius   = 8.f;
         skeleton->speed    = 150.0f;
         skeleton->hp       = 100.f;
         skeleton->texture  = TEXTURE_TYPE_SKELETON;
-        skeleton->offset   = litvec2(0.f, -18.f);
+        skeleton->offset   = vec2(0.f, -18.f);
         skeleton->order    = ORDER_TYPE_IDLE;
     }
 
@@ -183,27 +194,9 @@ int main(void) {
         for (int i = 0; i < engine->navmesh.edges.num; ++i) {
             cdt_edge *edge = engine->navmesh.edges.data[i];
 
-            Vec4 color = Vec4{0,0,0,1};
-            if (cdt_is_constrained(edge)) {
-                color = Vec4{1,1,0,1};
-            }
-
-            Colored_Vertex a = {0}; {
-                a.position.x = edge->e[0].org->pos.x;
-                a.position.y = edge->e[0].org->pos.y;
-                a.position.z = 0.3f;
-                a.color = color;
-            }
-            engine->line_shader_buffer.push(a);
-
-            Colored_Vertex b = {0}; {
-                b.position.x = cdt_sym(&edge->e[0])->org->pos.x;
-                b.position.y = cdt_sym(&edge->e[0])->org->pos.y;
-                b.position.z = 0.3f;
-                b.color = color;
-            }
-
-            engine->line_shader_buffer.push(b);
+            Vec4 color = cdt_is_constrained(edge) ? Vec4{1,0,1,1} : Vec4{0,0,0,1};
+            draw_push_colored_vertex(edge->e[0].org->pos.x, edge->e[0].org->pos.y, 0.3f, color);
+            draw_push_colored_vertex(cdt_sym(&edge->e[0])->org->pos.x, cdt_sym(&edge->e[0])->org->pos.y, 0.3f, color);
         }
 
         glUseProgram(engine->simple_shader);

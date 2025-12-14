@@ -35,5 +35,10 @@ struct M4x4 {
     f32 e[4][4];
 };
 
+struct Directed_Edge {
+    Vec2 src;
+    Vec2 dst;
+};
+
 #define F32_MAX ( 3.402823e+38f)
 #define F32_MIN (-3.402823e+38f)

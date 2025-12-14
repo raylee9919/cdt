@@ -69,13 +69,22 @@ Index_Dist peek(Priority_Queue *pq) {
 // Array
 //
 template<typename T>
+Array<T>::Array() {
+}
+
+template<typename T>
+Array<T>::~Array() {
+    free(data);
+}
+
+template<typename T>
 void Array<T>::push(T val) {
     if (count == cap) {
-        u64 new_cap = 4;
+        int new_cap = 4;
         if (cap == 0) {
             data = (T *)malloc(new_cap*sizeof(T));
         } else {
-            new_cap = cap<<1;
+            new_cap = cap + (cap>>1);
             T *new_data = (T *)realloc(data, new_cap*sizeof(T));
             data = new_data;
         }
@@ -109,25 +118,84 @@ const T& Array<T>::operator[](u64 idx) const {
 // Stack
 //
 template<typename T>
-T stack_pop(Stack<T> *s) {
-    assert(s->top > 0);
-    --s->top;
-    return s->data[s->top];
+Stack<T>::Stack() {
 }
 
 template<typename T>
-void stack_push(Stack<T> *s, T item) {
-    assert(s->top < arrcnt(s->data));
-    s->data[s->top] = item;
-    ++s->top;
+Stack<T>::~Stack() {
 }
 
 template<typename T>
-int stack_empty(Stack<T> *s) {
-    return (s->top == 0);
+T Stack<T>::pop() {
+    assert(top > 0);
+    --top;
+    return data[top];
 }
 
 template<typename T>
-void stack_clear(Stack<T> *s) {
-    s->top = 0;
+void Stack<T>::push(T item) {
+    assert(top < arrcnt(data));
+    data[top] = item;
+    ++top;
+}
+
+template<typename T>
+int Stack<T>::count() {
+    return top;
+}
+
+template<typename T>
+bool Stack<T>::empty() {
+    return top == 0;
+}
+
+template<typename T>
+void Stack<T>::clear() {
+    top = 0;
+}
+
+// Queue
+//
+template<typename T>
+Queue<T>::Queue() {
+}
+
+template<typename T>
+Queue<T>::~Queue() {
+}
+
+template<typename T>
+void Queue<T>::push(T val) {
+    int next = (back + 1)%arrcnt(data);
+    assert(next != front);
+    data[back] = val;
+    back = next;
+}
+
+template<typename T>
+T Queue<T>::pop() {
+    assert(front != back);
+    T val = data[front];
+    front = (front + 1) % arrcnt(data);
+    return val;
+}
+
+template<typename T>
+int Queue<T>::count() {
+    if (back >= front) {
+        return back - front;
+    } else {
+        return back + arrcnt(data) - front;
+    }
+}
+
+template<typename T>
+bool Queue<T>::empty() {
+    return front == back;
+}
+
+template<typename T>
+void Queue<T>::clear() {
+    front = 0;
+    back = 0;
 }

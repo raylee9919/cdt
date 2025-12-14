@@ -18,6 +18,13 @@ struct Colored_Vertex {
     Vec4 color;
 };
 
+struct Perf_Log {
+    Perf_Log(const char *text);
+    ~Perf_Log();
+    const char *text = 0;
+    f64 t = 0.f;
+};
+
 typedef u32 Texture_Type;
 enum {
     TEXTURE_TYPE_NULL   = 0,
@@ -104,8 +111,8 @@ struct Entity {
     // Order
     Order_Type      order;
     Vec2            order_position;
-    Stack<Vec2>     path_stack;
-    Stack<Vec2>     path_shadow_stack;
+    Queue<Vec2>     path_queue;
+    Queue<Vec2>     path_shadow_queue;
     
 
     // Animation

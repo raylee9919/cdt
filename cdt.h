@@ -1084,9 +1084,23 @@ cdt_triangles cdt_get_adjacent_triangles(cdt_triangle triangle) {
     return result;
 }
 
+cdt_quad_edge *cdt_get_portal_edge(cdt_triangle src, cdt_triangle dst) {
+    for (int i = 0; i < 3; ++i) {
+        cdt_quad_edge *e1 = cdt_sym(src.edges[i]);
+        for (int j = 0; j < 3; ++j) {
+            cdt_quad_edge *e2 = dst.edges[j];
+            if (e1 == e2) {
+                return e1;
+            }
+        }
+    }
+    return 0;
+}
+
 int cdt_is_constrained(cdt_edge *edge) {
     return edge->ids.num > 0;
 }
+
 
 
 
