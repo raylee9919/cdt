@@ -155,18 +155,21 @@ typedef struct {
 
 
 // APIs
+//
 void cdt_init(cdt_context *ctx, cdt_f32 x1, cdt_f32 y1, cdt_f32 x2, cdt_f32 y2, cdt_f32 x3, cdt_f32 y3);
 
 void cdt_insert(cdt_context *ctx, cdt_id id, cdt_f32 x1, cdt_f32 y1, cdt_f32 x2, cdt_f32 y2);
 void cdt_remove(cdt_context *ctx, cdt_id id);
 
+int cdt_is_constrained(cdt_edge *edge);
+
 int cdt_get_vertex_count(cdt_context *ctx);
 int cdt_get_edge_count(cdt_context *ctx);
 int cdt_get_triangle_count(cdt_context *ctx);
-
-int cdt_is_constrained(cdt_edge *edge);
+void cdt_get_all_triangles(cdt_context *ctx, cdt_triangle *out_triangles);
 cdt_triangle cdt_get_triangle_containing_point(cdt_context *ctx, cdt_f32 x, cdt_f32 y);
 cdt_triangles cdt_get_adjacent_triangles(cdt_triangle triangle);
+
 
 
 #ifdef __cplusplus
@@ -1099,6 +1102,53 @@ cdt_quad_edge *cdt_get_portal_edge(cdt_triangle src, cdt_triangle dst) {
 
 int cdt_is_constrained(cdt_edge *edge) {
     return edge->ids.num > 0;
+}
+
+void cdt_get_all_triangles(cdt_context *ctx, cdt_triangle *out_triangles) {
+    int num_edge = cdt_get_edge_count(ctx);
+    cdt_quad_edge **quad_edge_visited = (cdt_quad_edge **)malloc(sizeof(cdt_quad_edge *)*num_edge*2);
+    int next = 0;
+
+    // DFS.
+    cdt_quad_edge_array stk = {0};
+    cdt_quad_edge_array_push(&stk, &ctx->edges.data[0]->e[0]);
+    int idx = 0;
+    while (stk.num > 0) {
+        cdt_quad_edge *e1 = cdt_stack_pop(&stk);
+        cdt_quad_edge *e2 = cdt_lnext(e1);
+        cdt_quad_edge *e3 = cdt_lnext(e2);
+
+        int skip = 0;
+        for (int i = 0; i < next; ++i) {
+            if (quad_edge_visited[i]==e1) {
+                skip = 1;
+                break;
+            }
+        }
+        if (skip) { continue; }
+
+        quad_edge_visited[next++] = e1;
+        quad_edge_visited[next++] = e2;
+        quad_edge_visited[next++] = e3;
+
+        cdt_triangle *tri = out_triangles + idx;
+        tri->edges[0] = e1;
+        tri->x[0]     = e1->org->pos.x;
+        tri->y[0]     = e1->org->pos.y;
+        tri->edges[1] = e2;
+        tri->x[1]     = e2->org->pos.x;
+        tri->y[1]     = e2->org->pos.y;
+        tri->edges[2] = e3;
+        tri->x[2]     = e3->org->pos.x;
+        tri->y[2]     = e3->org->pos.y;
+        idx++;
+
+        cdt_quad_edge_array_push(&stk, cdt_sym(e1));
+        cdt_quad_edge_array_push(&stk, cdt_sym(e2));
+        cdt_quad_edge_array_push(&stk, cdt_sym(e3));
+    }
+
+    free(quad_edge_visited);
 }
 
 

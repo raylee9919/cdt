@@ -1,10 +1,10 @@
 "  #version 330 core\n"
-"  layout (location = 0) in vec2 v_pos;\n"
+"  layout (location = 0) in vec3 v_pos;\n"
 "  layout (location = 1) in vec2 v_uv;\n"
 "  uniform mat4 model;\n"
 "  uniform mat4 vp;\n"
 "  out vec2 f_uv;\n"
 "  void main() {\n"
 "      f_uv = v_uv;\n"
-"      gl_Position = vp * model * vec4(v_pos, 1.f, 1.f);\n"
+"      gl_Position = vp * model * vec4(v_pos, 1.f);\n"
 "  }";

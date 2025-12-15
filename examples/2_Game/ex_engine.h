@@ -9,20 +9,13 @@
    ======================================================================== */
 
 struct Sprite_Vertex {
-    Vec2 position;
+    Vec3 position;
     Vec2 uv;
 };
 
 struct Colored_Vertex {
     Vec3 position;
     Vec4 color;
-};
-
-struct Perf_Log {
-    Perf_Log(const char *text);
-    ~Perf_Log();
-    const char *text = 0;
-    f64 t = 0.f;
 };
 
 typedef u32 Texture_Type;
@@ -58,6 +51,7 @@ enum {
     ORDER_TYPE_IDLE,
     ORDER_TYPE_MOVE,
     ORDER_TYPE_DIE,
+    ORDER_TYPE_ATTACK,
     ORDER_TYPE_COUNT
 };
 
@@ -89,6 +83,8 @@ enum {
     ENTITY_FLAG_FLIP_TEX_U      = 0x4,
     ENTITY_FLAG_MOUSE_CONTROL   = 0x8,
     ENTITY_FLAG_DIEABLE         = 0x10,
+    ENTITY_FLAG_DRAW_BACK       = 0x20,
+    ENTITY_FLAG_FOE             = 0x40,
 };
 
 struct Entity {
@@ -108,23 +104,35 @@ struct Entity {
     Vec2            offset;
     Texture_Type    texture;
 
-    // Order
+    // Sim
+    //
+    f32             tick_t;
     Order_Type      order;
     Vec2            order_position;
+    Entity         *target; // @Temporary: You know this is dangerous.
+    Vec2           *navmesh;
     Queue<Vec2>     path_queue;
-    Queue<Vec2>     path_shadow_queue;
+    Array<Vec2>     l_points;
+    Array<Vec2>     r_points;
+    Queue<Vec2>     debug_path_queue;
+    Array<Vec2>     debug_triangles_in_path;
     
 
     // Animation
+    //
     f32 animation_t;
     u32 animation_frame_offset;
 
-    // Navigation
-    Vec2       *navmesh;
-    Array<Vec2> triangles_in_path;
 
     // Draw
+    //
     f32 u1, v1, u2, v2;
+};
+
+struct Navmesh {
+    cdt_context ctx;
+    cdt_triangle *triangles;
+    int num_tri;
 };
 
 struct Engine {
@@ -141,7 +149,7 @@ struct Engine {
     u32 next_entity_id;
     Entity *entity_sentinel;
 
-    cdt_context navmesh;
+    Navmesh navmesh;
 
     Vec2 camera_position;
 
@@ -158,6 +166,9 @@ struct Engine {
     GLuint simple_shader_color;
 
     Array<Colored_Vertex> line_shader_buffer;
+
+    // @Temporary:
+    Vec2 player_position;
 };
 
 static Engine *engine;

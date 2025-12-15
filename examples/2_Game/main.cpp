@@ -40,6 +40,7 @@
 //
 #include "ex_math.cpp"
 #include "ex_ds.cpp"
+#include "pathfind.cpp"
 #include "ex_engine.cpp"
 #include "ex_gl.cpp"
 
@@ -88,9 +89,9 @@ int main(void) {
 
 
 
-    cdt_init(&engine->navmesh, 0, 4096.f, -4096.f, -4096.f, 4096.f, -4096.f);
+    cdt_init(&engine->navmesh.ctx, 0, 4096.f, -4096.f, -4096.f, 4096.f, -4096.f);
 
-    Entity *ground = engine_alloc_entity(ENTITY_FLAG_DRAW); {
+    Entity *ground = engine_alloc_entity(ENTITY_FLAG_DRAW|ENTITY_FLAG_DRAW_BACK); {
         f32 dim = 1024.f;
         f32 uv_repeat = 16.f;
         ground->size = vec2(dim, dim);
@@ -99,16 +100,16 @@ int main(void) {
         ground->v1 = 0.f;
         ground->u2 = uv_repeat;
         ground->v2 = uv_repeat;
-        cdt_insert(&engine->navmesh, ground->id, -dim,  dim, -dim, -dim);
-        cdt_insert(&engine->navmesh, ground->id, -dim, -dim,  dim, -dim);
-        cdt_insert(&engine->navmesh, ground->id,  dim, -dim,  dim,  dim);
-        cdt_insert(&engine->navmesh, ground->id,  dim,  dim, -dim,  dim);
+        cdt_insert(&engine->navmesh.ctx, ground->id, -dim,  dim, -dim, -dim);
+        cdt_insert(&engine->navmesh.ctx, ground->id, -dim, -dim,  dim, -dim);
+        cdt_insert(&engine->navmesh.ctx, ground->id,  dim, -dim,  dim,  dim);
+        cdt_insert(&engine->navmesh.ctx, ground->id,  dim,  dim, -dim,  dim);
     }
 
     for (int r = 0; r < 4; ++r) {
         for (int c = 0; c < 4; ++c) {
             Entity *building   = engine_alloc_entity(ENTITY_FLAG_DRAW);
-            building->position = vec2(-400.f+(270.f+r*10.f)*c, -400.f+(270.f-c*12.f)*r);
+            building->position = vec2(-400.f+(175.f+r*10.f)*c, -400.f+(270.f+c*12.f)*r);
             building->size     = vec2(SPRITE_BUILDING_WIDTH, SPRITE_BUILDING_HEIGHT);
             building->texture  = TEXTURE_TYPE_BUILDING;
             building->offset   = vec2(0.f, -72.f);
@@ -120,7 +121,7 @@ int main(void) {
             arrput(building->navmesh, vec2( 85.f,-100.f));
             for (int i = 0 ; i < arrlen(building->navmesh); ++i) {
                 int j = (i+1)%arrlen(building->navmesh);
-                cdt_insert(&engine->navmesh, building->id, 
+                cdt_insert(&engine->navmesh.ctx, building->id, 
                            building->position.x + building->navmesh[i].x, building->position.y + building->navmesh[i].y,
                            building->position.x + building->navmesh[j].x, building->position.y + building->navmesh[j].y);
             }
@@ -143,11 +144,23 @@ int main(void) {
     }
 
     {
-        Entity *skeleton = engine_alloc_entity(ENTITY_FLAG_DRAW|ENTITY_FLAG_ANIMATE|ENTITY_FLAG_DIEABLE); 
-        skeleton->position = vec2( 0.f, 80.f);
+        Entity *skeleton = engine_alloc_entity(ENTITY_FLAG_DRAW|ENTITY_FLAG_ANIMATE|ENTITY_FLAG_FOE|ENTITY_FLAG_DIEABLE); 
+        skeleton->position = vec2( 0.f, 70.f);
         skeleton->size     = vec2(SPRITE_SKELETON_WIDTH, SPRITE_SKELETON_HEIGHT);
-        skeleton->radius   = 8.f;
+        skeleton->radius   = 20.f;
         skeleton->speed    = 150.0f;
+        skeleton->hp       = 100.f;
+        skeleton->texture  = TEXTURE_TYPE_SKELETON;
+        skeleton->offset   = vec2(0.f, -18.f);
+        skeleton->order    = ORDER_TYPE_IDLE;
+    }
+
+    {
+        Entity *skeleton = engine_alloc_entity(ENTITY_FLAG_DRAW|ENTITY_FLAG_ANIMATE|ENTITY_FLAG_FOE|ENTITY_FLAG_DIEABLE); 
+        skeleton->position = vec2(-200.f, 70.f);
+        skeleton->size     = vec2(SPRITE_SKELETON_WIDTH, SPRITE_SKELETON_HEIGHT);
+        skeleton->radius   = 20.f;
+        skeleton->speed    = 120.0f;
         skeleton->hp       = 100.f;
         skeleton->texture  = TEXTURE_TYPE_SKELETON;
         skeleton->offset   = vec2(0.f, -18.f);
@@ -158,6 +171,7 @@ int main(void) {
     glfwSetWindowSize(engine->window, (int)(engine->resolution.x+0.5f), (int)(engine->resolution.y+0.5f));
     while (!glfwWindowShouldClose(engine->window)) {
         engine_tick();
+        engine->player_position = player->position;
 
 
         // Process events
@@ -191,8 +205,8 @@ int main(void) {
 
         // Draw navmesh
         //
-        for (int i = 0; i < engine->navmesh.edges.num; ++i) {
-            cdt_edge *edge = engine->navmesh.edges.data[i];
+        for (int i = 0; i < engine->navmesh.ctx.edges.num; ++i) {
+            cdt_edge *edge = engine->navmesh.ctx.edges.data[i];
 
             Vec4 color = cdt_is_constrained(edge) ? Vec4{1,0,1,1} : Vec4{0,0,0,1};
             draw_push_colored_vertex(edge->e[0].org->pos.x, edge->e[0].org->pos.y, 0.3f, color);
@@ -200,6 +214,7 @@ int main(void) {
         }
 
         glUseProgram(engine->simple_shader);
+        glDisable(GL_DEPTH_TEST); 
         glEnableVertexAttribArray(0);
         glEnableVertexAttribArray(1);
         {
@@ -215,8 +230,8 @@ int main(void) {
         }
         glDisableVertexAttribArray(0);
         glDisableVertexAttribArray(1);
+        glEnable(GL_DEPTH_TEST); 
         glUseProgram(0);
-
 
         glfwSwapBuffers(engine->window);
     }

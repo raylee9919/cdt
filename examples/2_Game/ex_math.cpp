@@ -100,6 +100,15 @@ Vec4 vec4(Vec3 rgb, f32 a) {
     return result;
 }
 
+Vec4 vec4(Vec2 rg, f32 b, f32 a) {
+    Vec4 result = {};
+    result.r = rg.x;
+    result.g = rg.y;
+    result.b = b;
+    result.a = a;
+    return result;
+}
+
 M4x4 m4x4_identity(void) {
     M4x4 result = {{
         { 1, 0, 0, 0},
@@ -162,6 +171,30 @@ M4x4 m4x4_proj(Vec2 resolution) {
 
 M4x4 m4x4_view_proj(Vec2 camera_position, Vec2 resolution) {
     return m4x4_proj(resolution)*m4x4_view(camera_position);
+}
+
+Vec4 operator*(M4x4 m, Vec4 v) {
+    Vec4 result = {};
+    result.r += v.r * m.e[0][0];
+    result.r += v.g * m.e[0][1];
+    result.r += v.b * m.e[0][2];
+    result.r += v.a * m.e[0][3];
+
+    result.g += v.r * m.e[1][0];
+    result.g += v.g * m.e[1][1];
+    result.g += v.b * m.e[1][2];
+    result.g += v.a * m.e[1][3];
+
+    result.b += v.r * m.e[2][0];
+    result.b += v.g * m.e[2][1];
+    result.b += v.b * m.e[2][2];
+    result.b += v.a * m.e[2][3];
+
+    result.a += v.r * m.e[3][0];
+    result.a += v.g * m.e[3][1];
+    result.a += v.b * m.e[3][2];
+    result.a += v.a * m.e[3][3];
+    return result;
 }
 
 
