@@ -213,6 +213,7 @@ int main(void) {
             draw_push_colored_vertex(cdt_sym(&edge->e[0])->org->pos.x, cdt_sym(&edge->e[0])->org->pos.y, 0.3f, color);
         }
 
+#if 1
         glUseProgram(engine->simple_shader);
         glDisable(GL_DEPTH_TEST); 
         glEnableVertexAttribArray(0);
@@ -232,6 +233,7 @@ int main(void) {
         glDisableVertexAttribArray(1);
         glEnable(GL_DEPTH_TEST); 
         glUseProgram(0);
+#endif
 
         glfwSwapBuffers(engine->window);
     }

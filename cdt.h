@@ -1,5 +1,5 @@
 /* 
-   cdt - v0.11 - Dynamic 2D Constrained Delaunay Triangulation Library
+   cdt - v0.12 - Dynamic 2D Constrained Delaunay Triangulation Library
    Seong Woo Lee 2025
 
 
@@ -20,9 +20,9 @@
        First, initialize your 'cdt_context'.
 
            void cdt_init(cdt_context *ctx,
-                         cdt_f32 x1, cdt_f32 y1,
-                         cdt_f32 x2, cdt_f32 y2,
-                         cdt_f32 x3, cdt_f32 y3)
+                         cdt_float x1, cdt_float y1,
+                         cdt_float x2, cdt_float y2,
+                         cdt_float x3, cdt_float y3)
        
        Provide a pointer to the context along with the three vertices of the 
        super-triangle in counter-clockwise order. Make sure the super-triangle 
@@ -34,7 +34,7 @@
 
            void cdt_insert(cdt_context *ctx,
                            cdt_id id,
-                           cdt_f32 x1, cdt_f32 y1, cdt_f32 x2, cdt_f32 y2)
+                           cdt_float x1, cdt_float y1, cdt_float x2, cdt_float y2)
        
        Pass in the initialized context with the ID you wish to assign to the 
        constraint. Then provide the coordinates of the two endpoints that define 
@@ -55,10 +55,10 @@
 #include <math.h>
 #include <string.h>
 
-typedef float         cdt_f32;
+typedef float         cdt_float;
 typedef unsigned int  cdt_id;
 #define cdt_assert(exp) if (!(exp)) {*(volatile int*)0=0;}
-#define CDT_STATIC static
+#define CDTDEF 
 
 #ifdef __cplusplus
 extern "C" {
@@ -69,7 +69,7 @@ typedef struct cdt_quad_edge cdt_quad_edge;
 typedef struct cdt_edge cdt_edge;
 
 typedef struct {
-    cdt_f32 x, y;
+    cdt_float x, y;
 } cdt_vec2;
 
 typedef struct {
@@ -125,16 +125,16 @@ typedef struct {
 } cdt_context;
 
 typedef struct {
-    int exists;
-    int on_edge;
+    int is_exact_vertex;
+    int is_on_edge;
     cdt_vertex *vertex;
     cdt_quad_edge *edge;
 } cdt_locate_result;
 
 typedef struct {
     cdt_vertex *vert;
-    cdt_f32 dx;
-    cdt_f32 dy;
+    cdt_float dx;
+    cdt_float dy;
 } cdt_vertex_sort_struct;
 
 typedef struct cdt_index_node cdt_index_node;
@@ -145,8 +145,8 @@ struct cdt_index_node {
 
 typedef struct {
     cdt_quad_edge *edges[3];
-    cdt_f32 x[3];
-    cdt_f32 y[3];
+    cdt_float x[3];
+    cdt_float y[3];
 } cdt_triangle;
 
 typedef struct {
@@ -156,19 +156,21 @@ typedef struct {
 
 // APIs
 //
-void cdt_init(cdt_context *ctx, cdt_f32 x1, cdt_f32 y1, cdt_f32 x2, cdt_f32 y2, cdt_f32 x3, cdt_f32 y3);
+CDTDEF void           cdt_init(cdt_context *ctx, cdt_float x1, cdt_float y1, cdt_float x2, cdt_float y2, cdt_float x3, cdt_float y3);
 
-void cdt_insert(cdt_context *ctx, cdt_id id, cdt_f32 x1, cdt_f32 y1, cdt_f32 x2, cdt_f32 y2);
-void cdt_remove(cdt_context *ctx, cdt_id id);
+CDTDEF void           cdt_insert(cdt_context *ctx, cdt_id id, cdt_float x1, cdt_float y1, cdt_float x2, cdt_float y2);
+CDTDEF void           cdt_remove(cdt_context *ctx, cdt_id id);
 
-int cdt_is_constrained(cdt_edge *edge);
+CDTDEF int            cdt_is_constrained(cdt_edge *edge);
 
-int cdt_get_vertex_count(cdt_context *ctx);
-int cdt_get_edge_count(cdt_context *ctx);
-int cdt_get_triangle_count(cdt_context *ctx);
-void cdt_get_all_triangles(cdt_context *ctx, cdt_triangle *out_triangles);
-cdt_triangle cdt_get_triangle_containing_point(cdt_context *ctx, cdt_f32 x, cdt_f32 y);
-cdt_triangles cdt_get_adjacent_triangles(cdt_triangle triangle);
+CDTDEF int            cdt_get_vertex_count(cdt_context *ctx);
+CDTDEF int            cdt_get_edge_count(cdt_context *ctx);
+CDTDEF int            cdt_get_triangle_count(cdt_context *ctx);
+
+CDTDEF void           cdt_get_all_triangles(cdt_context *ctx, cdt_triangle *out_triangles);
+CDTDEF cdt_triangle   cdt_get_triangle_containing_point(cdt_context *ctx, cdt_float x, cdt_float y);
+CDTDEF cdt_triangles  cdt_get_adjacent_triangles(cdt_triangle triangle);
+CDTDEF cdt_quad_edge *cdt_get_portal_edge(cdt_triangle src, cdt_triangle dst);
 
 
 
@@ -456,13 +458,13 @@ cdt_quad_edge *cdt_connect(cdt_context *ctx, cdt_quad_edge *a, cdt_quad_edge *b)
 
 // Geometry/Math
 //
-cdt_f32 cdt_orientation(cdt_vec2 a, cdt_vec2 b, cdt_vec2 c) {
+cdt_float cdt_orientation(cdt_vec2 a, cdt_vec2 b, cdt_vec2 c) {
     // Returns twice the area of the triangle. Signed if the orientation is clockwise.
     // @Todo: SIMD?
-    cdt_f32 x1 = b.x - a.x;
-    cdt_f32 y1 = b.y - a.y;
-    cdt_f32 x2 = c.x - a.x;
-    cdt_f32 y2 = c.y - a.y;
+    cdt_float x1 = b.x - a.x;
+    cdt_float y1 = b.y - a.y;
+    cdt_float x2 = c.x - a.x;
+    cdt_float y2 = c.y - a.y;
     return (x1*y2 - x2*y1);
 }
 
@@ -485,16 +487,16 @@ int cdt_in_circumcircle(cdt_vec2 p, cdt_vec2 a, cdt_vec2 b, cdt_vec2 c) {
     //
     //        Shewchuck's precise math predicate seems solid.
     //
-    cdt_f32 ax = a.x; cdt_f32 ay = a.y;
-    cdt_f32 bx = b.x; cdt_f32 by = b.y;
-    cdt_f32 cx = c.x; cdt_f32 cy = c.y;
-    cdt_f32 px = p.x; cdt_f32 py = p.y;
-    cdt_f32 ax_ = ax-px;
-    cdt_f32 ay_ = ay-py;
-    cdt_f32 bx_ = bx-px;
-    cdt_f32 by_ = by-py;
-    cdt_f32 cx_ = cx-px;
-    cdt_f32 cy_ = cy-py;
+    cdt_float ax = a.x; cdt_float ay = a.y;
+    cdt_float bx = b.x; cdt_float by = b.y;
+    cdt_float cx = c.x; cdt_float cy = c.y;
+    cdt_float px = p.x; cdt_float py = p.y;
+    cdt_float ax_ = ax-px;
+    cdt_float ay_ = ay-py;
+    cdt_float bx_ = bx-px;
+    cdt_float by_ = by-py;
+    cdt_float cx_ = cx-px;
+    cdt_float cy_ = cy-py;
     return ((ax_*ax_ + ay_*ay_) * (bx_*cy_-cx_*by_) -
             (bx_*bx_ + by_*by_) * (ax_*cy_-cx_*ay_) +
             (cx_*cx_ + cy_*cy_) * (ax_*by_-bx_*ay_)) > 0;
@@ -502,18 +504,18 @@ int cdt_in_circumcircle(cdt_vec2 p, cdt_vec2 a, cdt_vec2 b, cdt_vec2 c) {
 
 int cdt_is_convex(cdt_vec2 a, cdt_vec2 b, cdt_vec2 c, cdt_vec2 d) {
     // @Todo: SIMD?
-    cdt_f32 x1 = b.x - a.x;
-    cdt_f32 y1 = b.y - a.y;
-    cdt_f32 x2 = c.x - b.x;
-    cdt_f32 y2 = c.y - b.y;
-    cdt_f32 x3 = d.x - c.x;
-    cdt_f32 y3 = d.y - c.y;
-    cdt_f32 x4 = a.x - d.x;
-    cdt_f32 y4 = a.y - d.y;
-    cdt_f32 c1 = x1*y2 - x2*y1;
-    cdt_f32 c2 = x2*y3 - x3*y2;
-    cdt_f32 c3 = x3*y4 - x4*y3;
-    cdt_f32 c4 = x4*y1 - x1*y4;
+    cdt_float x1 = b.x - a.x;
+    cdt_float y1 = b.y - a.y;
+    cdt_float x2 = c.x - b.x;
+    cdt_float y2 = c.y - b.y;
+    cdt_float x3 = d.x - c.x;
+    cdt_float y3 = d.y - c.y;
+    cdt_float x4 = a.x - d.x;
+    cdt_float y4 = a.y - d.y;
+    cdt_float c1 = x1*y2 - x2*y1;
+    cdt_float c2 = x2*y3 - x3*y2;
+    cdt_float c3 = x3*y4 - x4*y3;
+    cdt_float c4 = x4*y1 - x1*y4;
 
     return (c1*c2 > 0.f) && (c2*c3 > 0.f) && (c3*c4 > 0.f);
 }
@@ -527,9 +529,9 @@ int cdt_in_triangle(cdt_vec2 p, cdt_vec2 a, cdt_vec2 b, cdt_vec2 c) {
     cdt_vec2 ap = {p.x - a.x, p.y - a.y};
     cdt_vec2 bp = {p.x - b.x, p.y - b.y};
     cdt_vec2 cp = {p.x - c.x, p.y - c.y};
-    cdt_f32 oa = ab.x*ap.y - ab.y*ap.x;
-    cdt_f32 ob = bc.x*bp.y - bc.y*bp.x;
-    cdt_f32 oc = ca.x*cp.y - ca.y*cp.x;
+    cdt_float oa = ab.x*ap.y - ab.y*ap.x;
+    cdt_float ob = bc.x*bp.y - bc.y*bp.x;
+    cdt_float oc = ca.x*cp.y - ca.y*cp.x;
     // If the point is on the edge of a triangle, we can clip that ear triangle.
     return oa >= 0.f && ob >= 0.f && oc >= 0.f; 
 }
@@ -589,7 +591,7 @@ void cdt_ear_triangulate_simple_polygon(cdt_context *ctx, int num_verts, cdt_ver
             };
 
             int is_ear = 1;
-            cdt_f32 orientation = e[0].x*e[1].y - e[0].y*e[1].x;
+            cdt_float orientation = e[0].x*e[1].y - e[0].y*e[1].x;
             if (orientation > 0.f) {
                 for (cdt_index_node *node = node_rgt->next; node != node_lft; node = node->next) {
                     cdt_vec2 v = verts[node->idx].vert->pos;
@@ -649,21 +651,21 @@ ear_found:
 int cdt_vert_ccw_cmp(const void *vert1, const void *vert2) {
     cdt_vertex_sort_struct *va = (cdt_vertex_sort_struct *)vert1;
     cdt_vertex_sort_struct *vb = (cdt_vertex_sort_struct *)vert2;
-    cdt_f32 ax = va->dx;
-    cdt_f32 ay = va->dy;
-    cdt_f32 bx = vb->dx;
-    cdt_f32 by = vb->dy;
+    cdt_float ax = va->dx;
+    cdt_float ay = va->dy;
+    cdt_float bx = vb->dx;
+    cdt_float by = vb->dy;
 
     // @Todo: Is atan bad?
-    cdt_f32 angle_a = atan2f(ay, ax);
-    cdt_f32 angle_b = atan2f(by, bx);
+    cdt_float angle_a = atan2f(ay, ax);
+    cdt_float angle_b = atan2f(by, bx);
 
     if (angle_a != angle_b) {
         return angle_a < angle_b ? -1 : 1;
     }
 
-    cdt_f32 dist_a = ax * ax + ay * ay;
-    cdt_f32 dist_b = bx * bx + by * by;
+    cdt_float dist_a = ax * ax + ay * ay;
+    cdt_float dist_b = bx * bx + by * by;
 
     if (dist_a != dist_b) {
         return dist_a < dist_b ? -1 : 1;
@@ -705,7 +707,21 @@ void cdt_destroy_vertex(cdt_context *ctx, cdt_vertex *vert) {
     free(vert);
 }
 
-cdt_locate_result cdt_locate_point(cdt_context *ctx, cdt_vec2 target) {
+// 0. If the point is outside of the super-triangle,
+//    @Todo: Not handled yet. Will cause infinite loop.
+//
+// 1. If the point is equivalent some vertex: 
+//        '.is_exact_vertex' is set to 1
+//        '.vertex' is set to the pointer to that vertex.
+//
+// 2. If not, and the point is on some edge:
+//        '.is_on_edge' is set to 1
+//        '.edge' is set to the arbitrary quad edge which is part of the found edge.
+//
+// 3. If not, and the point in some triangle:
+//        '.is_on_edge' is set to 1
+//        '.edge' is set to the arbitrary quad edge which is part of the found edge.
+cdt_locate_result cdt_locate_point(cdt_context *ctx, cdt_float x, cdt_float y) {
     // @Todo: Better strategy for locating the point. 'Jump and Walk' is one 
     //        way to go. Should I implement spatial partitioning in here?
     //
@@ -718,6 +734,10 @@ cdt_locate_result cdt_locate_point(cdt_context *ctx, cdt_vec2 target) {
     cdt_locate_result result = {0};
     cdt_quad_edge *begin_edge = &ctx->edges.data[0]->e[0];
 
+    cdt_vec2 target = {0};
+    target.x = x;
+    target.y = y;
+
     for (cdt_quad_edge *e1 = begin_edge;;) {
         cdt_quad_edge *e2 = cdt_lnext(e1);
         cdt_quad_edge *e3 = cdt_lnext(e2);
@@ -729,7 +749,7 @@ cdt_locate_result cdt_locate_point(cdt_context *ctx, cdt_vec2 target) {
         // If one of its points is identical to my target, end iteration.
         for (int i = 0; i < 3; i+=1) {
             if (p[i].x == target.x && p[i].y == target.y) {
-                result.exists = 1;
+                result.is_exact_vertex = 1;
                 result.vertex = v[i];
                 return result;
             }
@@ -755,8 +775,8 @@ cdt_locate_result cdt_locate_point(cdt_context *ctx, cdt_vec2 target) {
         if (next == 0) {
             for (int i = 0; i < 3; i+=1) {
                 if (cdt_on_line(target, e[i]->org->pos, cdt_dst(e[i])->pos)) {
-                    result.on_edge = 1;
-                    result.edge    = e[i];
+                    result.is_on_edge = 1;
+                    result.edge = e[i];
                     return result;
                 }
             }
@@ -767,16 +787,16 @@ cdt_locate_result cdt_locate_point(cdt_context *ctx, cdt_vec2 target) {
 }
 
 cdt_vertex *cdt_insert_point(cdt_context *ctx, cdt_vec2 pos) {
-    cdt_locate_result locate = cdt_locate_point(ctx, pos); // @Todo: I should just inline it.
+    cdt_locate_result locate = cdt_locate_point(ctx, pos.x, pos.y); // @Todo: I should just inline it.
 
-    if (locate.exists) {
+    if (locate.is_exact_vertex) {
         return locate.vertex;
     }
 
     cdt_vertex *new_vertex = cdt_create_vertex(ctx, pos);
 
     cdt_quad_edge *start_side = locate.edge;
-    if (locate.on_edge) {
+    if (locate.is_on_edge) {
         // @Todo: According to Kallmann, I have to project the point to the edge, 
         //        but I assume it is for the epsilon-tested on-edge case. Currently, I am 
         //        defining 'point-on-edge' as a case if the determinant is 0. So, 
@@ -926,10 +946,10 @@ void cdt_insert_segment(cdt_id id, cdt_vertex *vert1, cdt_vertex *vert2) {
             cdt_quad_edge *e = cur->edges.data[i];
             nxt = cdt_dst(e);
             if (cdt_orientation(nxt->pos, p,q) == 0.f) {
-                cdt_f32 x1 = q.x - cur->pos.x;
-                cdt_f32 y1 = q.y - cur->pos.y;
-                cdt_f32 x2 = nxt->pos.x - cur->pos.x;
-                cdt_f32 y2 = nxt->pos.y - cur->pos.y;
+                cdt_float x1 = q.x - cur->pos.x;
+                cdt_float y1 = q.y - cur->pos.y;
+                cdt_float x2 = nxt->pos.x - cur->pos.x;
+                cdt_float y2 = nxt->pos.y - cur->pos.y;
                 if (x1*x2 + y1*y2 > 0.f) {
                     cdt_id_array_push(&cdt_get_edge(e)->ids, id);
                     break;
@@ -949,7 +969,7 @@ void cdt_insert_segment(cdt_id id, cdt_vertex *vert1, cdt_vertex *vert2) {
 //
 // APIs
 //
-void cdt_init(cdt_context *ctx, cdt_f32 x1, cdt_f32 y1, cdt_f32 x2, cdt_f32 y2, cdt_f32 x3, cdt_f32 y3) {
+void cdt_init(cdt_context *ctx, cdt_float x1, cdt_float y1, cdt_float x2, cdt_float y2, cdt_float x3, cdt_float y3) {
     memset(ctx, 0, sizeof(cdt_context));
 
     // @Todo: Support CW?
@@ -973,7 +993,7 @@ void cdt_init(cdt_context *ctx, cdt_f32 x1, cdt_f32 y1, cdt_f32 x2, cdt_f32 y2, 
     cdt_splice(cdt_sym(ca), ab);
 }
 
-void cdt_insert(cdt_context *ctx, cdt_id id, cdt_f32 x1, cdt_f32 y1, cdt_f32 x2, cdt_f32 y2) {
+void cdt_insert(cdt_context *ctx, cdt_id id, cdt_float x1, cdt_float y1, cdt_float x2, cdt_float y2) {
     cdt_vec2 p1;
     p1.x = x1;
     p1.y = y1;
@@ -1044,13 +1064,10 @@ int cdt_get_triangle_count(cdt_context *ctx) {
     return 2 - ctx->vertices.num + ctx->edges.num;
 }
 
-cdt_triangle cdt_get_triangle_containing_point(cdt_context *ctx, cdt_f32 x, cdt_f32 y) {
+cdt_triangle cdt_get_triangle_containing_point(cdt_context *ctx, cdt_float x, cdt_float y) {
     cdt_triangle result = {0};
-    cdt_vec2 p = {0};
-    p.x = x;
-    p.y = y;
-    cdt_locate_result loc = cdt_locate_point(ctx, p);
-    if (loc.exists || loc.on_edge) {
+    cdt_locate_result loc = cdt_locate_point(ctx, x, y);
+    if (loc.is_exact_vertex || loc.is_on_edge) {
         cdt_assert(!"Not covered yet.");
     } else {
         result.edges[0] = loc.edge;
@@ -1087,6 +1104,8 @@ cdt_triangles cdt_get_adjacent_triangles(cdt_triangle triangle) {
     return result;
 }
 
+// Returns the quad-edge of 'src' triangle that leads to 'dst' triangle.
+// Returns 0 if not found.
 cdt_quad_edge *cdt_get_portal_edge(cdt_triangle src, cdt_triangle dst) {
     for (int i = 0; i < 3; ++i) {
         cdt_quad_edge *e1 = cdt_sym(src.edges[i]);
