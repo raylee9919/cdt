@@ -8,7 +8,6 @@
 
    ======================================================================== */
 
-
 void path_find(Entity *entity, Vec2 src, Vec2 dst) {
     // Clear old path data.
     //
@@ -42,6 +41,21 @@ void path_find(Entity *entity, Vec2 src, Vec2 dst) {
     int src_idx = -1;
     int dst_idx = -1;
 
+    // @Todo: This is getting gnarly. I'm iterating over all triangles to 
+    //        find the indices of the two triangles found above.
+    //
+    //        Feasible solutions include:
+    //
+    //        1. Use a hash table for efficient lookups. Consider hashing the 
+    //           three sorted vertex coordinates of a triangle as the hash key.
+    //        2. Retain triangle data within the library, though this approach 
+    //           appears challenging.
+    //        3. Switch to a triangle-based approach, but this likely comse with 
+    //           is own pros and cons.
+    //        
+    //        The first solution can be implemented easily by the users, but the 
+    //        rest is really my responsibility.
+    //
     for (int i = 0; i < num_tri; ++i) {
         if (triangles[i].edges[0] == src_tri.edges[0] ||
             triangles[i].edges[1] == src_tri.edges[0] ||
@@ -58,52 +72,61 @@ void path_find(Entity *entity, Vec2 src, Vec2 dst) {
             triangles[i].edges[2] == dst_tri.edges[0]) 
         {
             dst_idx = i;
+            break;
         }
     }
 
     // A*
     //
+    // Uses Euclidean distance to the destination triangle as the heuristic.
+    //
+    // Uses the sum of distance from each triangle centroid to the shared edge 
+    // as the edge weight.
+    //
+
     // Preprocess
     f32 unreachable_dist = F32_MAX;
-    f32 *dist = (f32 *)malloc(sizeof(f32)*num_tri);
-    int *from_idx = (int *)malloc(sizeof(int)*num_tri);
+    f32 *f_costs = (f32 *)malloc(sizeof(f32)*num_tri);
+    int *parent  = (int *)malloc(sizeof(int)*num_tri);
     for (int i = 0; i < num_tri; ++i) {
-        dist[i] = unreachable_dist; 
-        from_idx[i] = i;
+        f_costs[i] = unreachable_dist; 
+        parent[i] = i;
     }
-    dist[src_idx] = 0.f;
-    from_idx[src_idx] = -1;
+    f_costs[src_idx] = 0.f;
+    parent[src_idx] = -1;
 
-    Priority_Queue pq = {};
+    Priority_Queue open_list = {};
     Index_Dist first = {}; {
         first.index = src_idx;
-        first.dist = 0.f;
+        first.dist  = 0.f;
     }
-    enqueue(&pq, first);
+    open_list.push(first);
 
     Vec2 dst_center = vec2((dst_tri.x[0] + dst_tri.x[1] + dst_tri.x[2]) * 0.333333f, 
                            (dst_tri.y[0] + dst_tri.y[1] + dst_tri.y[2]) * 0.333333f);
 
 
-    // A* loop
-    while (pq.size > 0) {
-        Index_Dist index_dist = dequeue(&pq);
-        int tri_idx = index_dist.index;
-        f32 current_dist = index_dist.dist;
+    // A* loop: f_cost = g_cost + h_cost(heuristic)
+    //
+    while (open_list.size > 0) {
+        // Pop the shortest in the open list. Implemented with priority queue.
+        Index_Dist index_dist = open_list.pop();
+        int idx_cur    = index_dist.index;
+        f32 f_cost_cur = index_dist.dist;
 
-        if (tri_idx == dst_idx) {
+        // Reached the destination triangle.
+        if (idx_cur == dst_idx) {
             break; 
         }
 
-        if (current_dist > dist[tri_idx]) {
+        if (f_cost_cur > f_costs[idx_cur]) {
             continue;
         }
 
-        cdt_triangle tri = triangles[tri_idx];
+        cdt_triangle tri = triangles[idx_cur];
         Vec2 tri_center = vec2((tri.x[0] + tri.x[1] + tri.x[2]) * 0.333333f,
                                (tri.y[0] + tri.y[1] + tri.y[2]) * 0.333333f);
 
-        // @Todo: Broken heuristics
         cdt_triangles adj = cdt_get_adjacent_triangles(tri);
         for (int i = 0; i < 3; ++i) {
             cdt_triangle adj_tri = adj.triangles[i];
@@ -118,10 +141,11 @@ void path_find(Entity *entity, Vec2 src, Vec2 dst) {
             // One cannot pass through a narrow pass.
             Vec2 p = vec2(portal_edge->e[2].org->pos.x, portal_edge->e[2].org->pos.y);
             Vec2 q = vec2(portal_edge->e[0].org->pos.x, portal_edge->e[0].org->pos.y);
-            f32 eps = 0.01f;
-            if (distance(p,q) < entity->radius*2.f + eps) {
+            f32 margin = 0.01f;
+            if (distance(p,q) < entity->radius*2.f + margin) {
                 continue;
             }
+            Vec2 edge_center = (p+q)*0.5f;
 
             int adj_idx = -1;
             for (int j = 0; j < num_tri; ++j) {
@@ -137,16 +161,22 @@ void path_find(Entity *entity, Vec2 src, Vec2 dst) {
             Vec2 adj_center = vec2((adj_tri.x[0] + adj_tri.x[1] + adj_tri.x[2]) * 0.333333f,
                                    (adj_tri.y[0] + adj_tri.y[1] + adj_tri.y[2]) * 0.333333f);
 
-            f32 new_dist = dist[tri_idx] + distance(tri_center, adj_center) + distance(adj_center, dst_center);
-            if (dist[adj_idx] > new_dist) {
-                from_idx[adj_idx] = tri_idx;
-                dist[adj_idx] = new_dist;
+            f32 h_cost_cur   = distance(tri_center, dst_center);
+            f32 g_cost_cur   = f_cost_cur - h_cost_cur;
+            f32 g_cur_to_adj = distance(tri_center, edge_center) + distance(edge_center, adj_center);
+            f32 g_cost_adj   = g_cost_cur + g_cur_to_adj;
+            f32 h_cost_adj   = distance(adj_center, dst_center);
+            f32 f_cost_new   = g_cost_adj + h_cost_adj;
+
+            if (f_costs[adj_idx] > f_cost_new) {
+                parent[adj_idx] = idx_cur;
+                f_costs[adj_idx]  = f_cost_new;
 
                 Index_Dist new_entry = {}; {
                     new_entry.index = adj_idx;
-                    new_entry.dist  = new_dist;
+                    new_entry.dist  = f_cost_new;
                 }
-                enqueue(&pq, new_entry);
+                open_list.push(new_entry);
             }
         }
     }
@@ -154,13 +184,13 @@ void path_find(Entity *entity, Vec2 src, Vec2 dst) {
 
     // Gather portal edges' points.
     //
-    if (dist[dst_idx] != unreachable_dist) {
+    if (f_costs[dst_idx] != unreachable_dist) {
         entity->debug_triangles_in_path.push({src_tri.x[0], src_tri.y[0]});
         entity->debug_triangles_in_path.push({src_tri.x[1], src_tri.y[1]});
         entity->debug_triangles_in_path.push({src_tri.x[2], src_tri.y[2]});
 
         if (src_idx != dst_idx) {
-            for (int t = from_idx[dst_idx]; t != src_idx; t = from_idx[t]) {
+            for (int t = parent[dst_idx]; t != src_idx; t = parent[t]) {
                 cdt_triangle tri = triangles[t];
                 Vec2 tri_cen = vec2((tri.x[0] + tri.x[1] + tri.x[2]) * 0.333333f,
                                     (tri.y[0] + tri.y[1] + tri.y[2]) * 0.333333f);
@@ -181,9 +211,9 @@ void path_find(Entity *entity, Vec2 src, Vec2 dst) {
         entity->l_points.push(dst);
         entity->r_points.push(dst);
         if (src_idx != dst_idx) {
-            for (int t = dst_idx; t != src_idx; t = from_idx[t]) {
+            for (int t = dst_idx; t != src_idx; t = parent[t]) {
                 cdt_triangle tri = triangles[t];
-                cdt_quad_edge *portal = cdt_get_portal_edge(tri, triangles[from_idx[t]]);
+                cdt_quad_edge *portal = cdt_get_portal_edge(tri, triangles[parent[t]]);
 
                 Vec2 l = vec2(portal->org->pos.x, portal->org->pos.y);
                 Vec2 r = vec2(cdt_sym(portal)->org->pos.x, cdt_sym(portal)->org->pos.y);
@@ -271,7 +301,7 @@ void path_find(Entity *entity, Vec2 src, Vec2 dst) {
     entity->debug_path_queue = entity->path_queue;
 
 
-    // Cleanup. If you are reading this, just use an arena allocator.
-    free(dist);
-    free(from_idx);
+    // Cleanup.
+    free(f_costs);
+    free(parent);
 }

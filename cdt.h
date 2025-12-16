@@ -1,5 +1,5 @@
 /* 
-   cdt - v0.12 - Dynamic 2D Constrained Delaunay Triangulation Library
+   cdt - v0.2 - Dynamic 2D Constrained Delaunay Triangulation Library
    Seong Woo Lee 2025
 
 
@@ -49,8 +49,6 @@
        
 */
 
-// @Todo: Remove realloc
-
 #include <stdint.h>
 #include <math.h>
 #include <string.h>
@@ -58,7 +56,12 @@
 typedef float         cdt_float;
 typedef unsigned int  cdt_id;
 #define cdt_assert(exp) if (!(exp)) {*(volatile int*)0=0;}
-#define CDTDEF 
+
+#ifdef CDT_STATIC
+#  define CDTDEF static
+#else
+#  define CDTDEF extern
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -171,7 +174,6 @@ CDTDEF void           cdt_get_all_triangles(cdt_context *ctx, cdt_triangle *out_
 CDTDEF cdt_triangle   cdt_get_triangle_containing_point(cdt_context *ctx, cdt_float x, cdt_float y);
 CDTDEF cdt_triangles  cdt_get_adjacent_triangles(cdt_triangle triangle);
 CDTDEF cdt_quad_edge *cdt_get_portal_edge(cdt_triangle src, cdt_triangle dst);
-
 
 
 #ifdef __cplusplus

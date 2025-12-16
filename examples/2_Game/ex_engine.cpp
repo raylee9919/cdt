@@ -88,8 +88,7 @@ void engine_tick(void) {
     glfwGetFramebufferSize(engine->window, &engine->framebuffer_width, &engine->framebuffer_height);
 
     engine->line_shader_buffer.clear();
-
-
+    engine->circle_shader_buffer.clear();
 }
 
 Entity *engine_alloc_entity(Entity_Flags flags) {
@@ -304,39 +303,44 @@ void engine_draw_entity(Entity *entity) {
         glUseProgram(0);
     }
 
-    if (!entity->debug_triangles_in_path.empty()) {
-        for (int i = 0; i < entity->debug_triangles_in_path.count; i+=3) {
-            for (int j = 0; j < 3; ++j) {
-                int d[] = {1, 1,-2};
-                int k = j + d[j];
-                int idx1 = i+j;
-                int idx2 = i+k;
 
-                draw_push_colored_vertex(entity->debug_triangles_in_path[idx1].x, entity->debug_triangles_in_path[idx1].y, 0.1f, Vec4{1,1,1,1});
-                draw_push_colored_vertex(entity->debug_triangles_in_path[idx2].x, entity->debug_triangles_in_path[idx2].y, 0.1f, Vec4{1,1,1,1});
+    if (!(entity->flags & ENTITY_FLAG_FOE)) {
+        // Draw the actual route
+        //
+        if (!entity->path_queue.empty()) {
+            for (int i = 0; i < entity->debug_path_queue.count() - 1; ++i) {
+                int idx1 = ((entity->debug_path_queue.front + i) % arrcnt(entity->debug_path_queue.data));
+                int idx2 = ((entity->debug_path_queue.front + i + 1) % arrcnt(entity->debug_path_queue.data));
+                Vec2 p1 = entity->debug_path_queue.data[idx1];
+                Vec2 p2 = entity->debug_path_queue.data[idx2];
+                draw_push_colored_vertex(p1.x, p1.y, 0.f, Vec4{0.f,0.f,1.f,1.f});
+                draw_push_colored_vertex(p2.x, p2.y, 0.f, Vec4{0.f,0.f,1.f,1.f});
             }
         }
-    }
 
-    // Draw the actual route
-    //
-    if (!entity->path_queue.empty()) {
-        for (int i = 0; i < entity->debug_path_queue.count() - 1; ++i) {
-            int idx1 = ((entity->debug_path_queue.front + i) % arrcnt(entity->debug_path_queue.data));
-            int idx2 = ((entity->debug_path_queue.front + i + 1) % arrcnt(entity->debug_path_queue.data));
-            Vec2 p1 = entity->debug_path_queue.data[idx1];
-            Vec2 p2 = entity->debug_path_queue.data[idx2];
-            draw_push_colored_vertex(p1.x, p1.y, 0.f, Vec4{0,0,1,1});
-            draw_push_colored_vertex(p2.x, p2.y, 0.f, Vec4{0,0,1,1});
+        // Draw triangles that are passed through.
+        //
+        if (!entity->debug_triangles_in_path.empty()) {
+            for (int i = 0; i < entity->debug_triangles_in_path.count; i+=3) {
+                for (int j = 0; j < 3; ++j) {
+                    int d[] = {1, 1,-2};
+                    int k = j + d[j];
+                    int idx1 = i+j;
+                    int idx2 = i+k;
+
+                    draw_push_colored_vertex(entity->debug_triangles_in_path[idx1].x, entity->debug_triangles_in_path[idx1].y, 0.1f, Vec4{1,1,1,1});
+                    draw_push_colored_vertex(entity->debug_triangles_in_path[idx2].x, entity->debug_triangles_in_path[idx2].y, 0.1f, Vec4{1,1,1,1});
+                }
+            }
         }
-    }
 
-    // Draw portal edges.
-    //
-    for (int i = entity->l_points.count - 1; i >= 0; --i) {
-        f32 t = parabolic_wave(engine->shader_time);
-        Vec3 c = lerp(vec3(0.5f), Vec3{1.f,1.f,0.f}, t*0.5f + 0.5f);
-        draw_push_colored_vertex(entity->l_points.data[i].x, entity->l_points.data[i].y, 0.f, vec4(c, 1.f));
-        draw_push_colored_vertex(entity->r_points.data[i].x, entity->r_points.data[i].y, 0.f, vec4(c, 1.f));
+        // Draw portal edges.
+        //
+        for (int i = entity->l_points.count - 1; i >= 0; --i) {
+            f32 t = parabolic_wave(engine->shader_time);
+            Vec3 c = lerp(vec3(0.5f), Vec3{1.f,1.f,0.f}, t*0.5f + 0.5f);
+            draw_push_colored_vertex(entity->l_points.data[i].x, entity->l_points.data[i].y, 0.f, vec4(c, 1.f));
+            draw_push_colored_vertex(entity->r_points.data[i].x, entity->r_points.data[i].y, 0.f, vec4(c, 1.f));
+        }
     }
 }

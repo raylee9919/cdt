@@ -17,6 +17,9 @@ struct Priority_Queue {
     // @Temporary
     Index_Dist items[4096];
     int size;
+
+    void push(Index_Dist value);
+    Index_Dist pop();
 };
 
 template<typename T>

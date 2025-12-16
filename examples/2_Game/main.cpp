@@ -11,7 +11,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
-#include <time.h>
 
 #define assert(exp) if (!(exp)) { *(volatile int *)0 = 0; }
 #define arrcnt(arr) (sizeof(arr)/sizeof(arr[0]))
@@ -88,8 +87,11 @@ int main(void) {
     engine->simple_shader_color = glad_glGetUniformLocation(engine->simple_shader, "color");
 
 
+    {
+        f32 dim = 16384.f;
+        cdt_init(&engine->navmesh.ctx, 0, dim, -dim, -dim, dim, -dim);
+    }
 
-    cdt_init(&engine->navmesh.ctx, 0, 4096.f, -4096.f, -4096.f, 4096.f, -4096.f);
 
     Entity *ground = engine_alloc_entity(ENTITY_FLAG_DRAW|ENTITY_FLAG_DRAW_BACK); {
         f32 dim = 1024.f;
@@ -143,6 +145,7 @@ int main(void) {
         player->order    = ORDER_TYPE_IDLE;
     }
 
+#if 0
     {
         Entity *skeleton = engine_alloc_entity(ENTITY_FLAG_DRAW|ENTITY_FLAG_ANIMATE|ENTITY_FLAG_FOE|ENTITY_FLAG_DIEABLE); 
         skeleton->position = vec2( 0.f, 70.f);
@@ -166,6 +169,7 @@ int main(void) {
         skeleton->offset   = vec2(0.f, -18.f);
         skeleton->order    = ORDER_TYPE_IDLE;
     }
+#endif
 
 
     glfwSetWindowSize(engine->window, (int)(engine->resolution.x+0.5f), (int)(engine->resolution.y+0.5f));
@@ -173,13 +177,12 @@ int main(void) {
         engine_tick();
         engine->player_position = player->position;
 
-
         // Process events
         // 
         glfwPollEvents();    
 
         // Clear
-        glClearColor(0.05f,0.05f,0.05f,1.0f);
+        glClearColor(0.3f,0.05f,0.05f,1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
         glClearDepth(1.0f);
         glClear(GL_DEPTH_BUFFER_BIT);
@@ -193,14 +196,6 @@ int main(void) {
 
 
 
-        glViewport(0, 0, engine->framebuffer_width, engine->framebuffer_height);
-
-
-
-
-        for (Entity *entity = engine->entity_sentinel->next; entity != engine->entity_sentinel; entity = entity->next) {
-            engine_draw_entity(entity);
-        }
 
 
         // Draw navmesh
@@ -208,10 +203,20 @@ int main(void) {
         for (int i = 0; i < engine->navmesh.ctx.edges.num; ++i) {
             cdt_edge *edge = engine->navmesh.ctx.edges.data[i];
 
-            Vec4 color = cdt_is_constrained(edge) ? Vec4{1,0,1,1} : Vec4{0,0,0,1};
+            Vec4 color = cdt_is_constrained(edge) ? Vec4{1.f,0.f,1.f,1.f} : Vec4{0.f,0.f,0.f,1.f};
             draw_push_colored_vertex(edge->e[0].org->pos.x, edge->e[0].org->pos.y, 0.3f, color);
             draw_push_colored_vertex(cdt_sym(&edge->e[0])->org->pos.x, cdt_sym(&edge->e[0])->org->pos.y, 0.3f, color);
         }
+
+
+        // Draw entities
+        //
+        for (Entity *entity = engine->entity_sentinel->next; entity != engine->entity_sentinel; entity = entity->next) {
+            engine_draw_entity(entity);
+        }
+
+
+        glViewport(0, 0, engine->framebuffer_width, engine->framebuffer_height);
 
 #if 1
         glUseProgram(engine->simple_shader);

@@ -166,6 +166,7 @@ struct Engine {
     GLuint simple_shader_color;
 
     Array<Colored_Vertex> line_shader_buffer;
+    Array<Colored_Vertex> circle_shader_buffer;
 
     // @Temporary:
     Vec2 player_position;

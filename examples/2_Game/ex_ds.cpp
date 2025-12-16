@@ -21,15 +21,6 @@ void heapifyUp(Priority_Queue *pq, int index) {
     }
 }
 
-void enqueue(Priority_Queue *pq, Index_Dist value) {
-    if (pq->size < arrcnt(pq->items)) {
-        pq->items[pq->size++] = value;
-        heapifyUp(pq, pq->size - 1);
-    } else {
-        assert(!"");
-    }
-}
-
 void heapifyDown(Priority_Queue *pq, int index) {
     int smallest = index;
     int left = 2 * index + 1;
@@ -49,21 +40,27 @@ void heapifyDown(Priority_Queue *pq, int index) {
     }
 }
 
-Index_Dist dequeue(Priority_Queue *pq)
-{
-    Index_Dist dummy = {0};
-    if (pq->size) {
-        Index_Dist item = pq->items[0];
-        pq->items[0] = pq->items[--pq->size];
-        heapifyDown(pq, 0);
+// Priority_Queue
+//
+void Priority_Queue::push(Index_Dist value) {
+    if (size < arrcnt(items)) {
+        items[size++] = value;
+        heapifyUp(this, size - 1);
+    } else {
+        assert(!"");
+    }
+}
+
+Index_Dist Priority_Queue::pop() {
+    Index_Dist dummy = {};
+    if (size > 0) {
+        Index_Dist item = items[0];
+        items[0] = items[--size];
+        heapifyDown(this, 0);
         return item;
     }
     assert(!"X");
     return dummy;
-}
-
-Index_Dist peek(Priority_Queue *pq) {
-    return pq->items[0];
 }
 
 // Array
