@@ -45,8 +45,13 @@ void engine_init(GLFWwindow *window) {
     engine->window = window;
     engine->last_frame_time = glfwGetTime();
 
+#if 1
     engine->resolution.x = 2560.f;
     engine->resolution.y = 1440.f;
+#else
+    engine->resolution.x = 1920.f;
+    engine->resolution.y = 1080.f;
+#endif
 
     engine_create_texture(TEXTURE_TYPE_PLAYER, SPRITESHEET_PLAYER_WIDTH, SPRITESHEET_PLAYER_HEIGHT, SPRITE_PLAYER_WIDTH, SPRITE_PLAYER_HEIGHT, SPRITESHEET_PLAYER_ROWS, SPRITESHEET_PLAYER_COLUMNS, spritesheet_player);
     engine_create_texture(TEXTURE_TYPE_SKELETON, SPRITESHEET_SKELETON_WIDTH, SPRITESHEET_SKELETON_HEIGHT, SPRITE_SKELETON_WIDTH, SPRITE_SKELETON_HEIGHT, SPRITESHEET_SKELETON_ROWS, SPRITESHEET_SKELETON_COLUMNS, spritesheet_skeleton);

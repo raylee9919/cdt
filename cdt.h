@@ -745,7 +745,8 @@ void cdt_destroy_vertex(cdt_context *ctx, cdt_vertex *vert) {
 // 1. If the point is equivalent some vertex: 
 //        '.is_exact_vertex' is set to 1
 //        '.vertex' is set to the pointer to that vertex.
-//
+//        '.edge' is set to the pointer to the arbitrary quad-edge that contains the vertex.
+// 
 // 2. If not, and the point is on some edge:
 //        '.is_on_edge' is set to 1
 //        '.edge' is set to the arbitrary quad edge which is part of the found edge.
@@ -753,6 +754,10 @@ void cdt_destroy_vertex(cdt_context *ctx, cdt_vertex *vert) {
 // 3. If not, and the point in some triangle:
 //        '.is_on_edge' is set to 1
 //        '.edge' is set to the arbitrary quad edge which is part of the found edge.
+// 
+// The important thing is that it always return some quad-edge, and you can 
+// start from there.
+//
 cdt_locate_result cdt_locate_point(cdt_context *ctx, cdt_float x, cdt_float y) {
     // @Todo: Better strategy for locating the point. 'Jump and Walk' is one 
     //        way to go. Should I implement spatial partitioning in here?
@@ -783,6 +788,7 @@ cdt_locate_result cdt_locate_point(cdt_context *ctx, cdt_float x, cdt_float y) {
             if (p[i].x == target.x && p[i].y == target.y) {
                 result.is_exact_vertex = 1;
                 result.vertex = v[i];
+                result.edge = v[i]->edges.data[0];
                 return result;
             }
         }
@@ -1097,22 +1103,22 @@ int cdt_get_triangle_count(cdt_context *ctx) {
     return 2 - ctx->vertices.num + ctx->edges.num;
 }
 
+// If the point lies exactly on a vertex or an edge, an arbitrary triangle 
+// containing that vertex or edge is returned.
+//
 cdt_triangle cdt_get_triangle_containing_point(cdt_context *ctx, cdt_float x, cdt_float y) {
     cdt_triangle result = {0};
     cdt_locate_result loc = cdt_locate_point(ctx, x, y);
-    if (loc.is_exact_vertex || loc.is_on_edge) {
-        cdt_assert(!"Not covered yet.");
-    } else {
-        result.edges[0] = loc.edge;
-        result.edges[1] = cdt_lnext(result.edges[0]);
-        result.edges[2] = cdt_lnext(result.edges[1]);
-        result.x[0] = result.edges[0]->org->pos.x;
-        result.y[0] = result.edges[0]->org->pos.y;
-        result.x[1] = result.edges[1]->org->pos.x;
-        result.y[1] = result.edges[1]->org->pos.y;
-        result.x[2] = result.edges[2]->org->pos.x;
-        result.y[2] = result.edges[2]->org->pos.y;
-    }
+
+    result.edges[0] = loc.edge;
+    result.edges[1] = cdt_lnext(result.edges[0]);
+    result.edges[2] = cdt_lnext(result.edges[1]);
+    result.x[0] = result.edges[0]->org->pos.x;
+    result.y[0] = result.edges[0]->org->pos.y;
+    result.x[1] = result.edges[1]->org->pos.x;
+    result.y[1] = result.edges[1]->org->pos.y;
+    result.x[2] = result.edges[2]->org->pos.x;
+    result.y[2] = result.edges[2]->org->pos.y;
 
     return result;
 }
@@ -1139,6 +1145,7 @@ cdt_triangles cdt_get_adjacent_triangles(cdt_triangle triangle) {
 
 // Returns the quad-edge of 'src' triangle that leads to 'dst' triangle.
 // Returns 0 if not found.
+//
 cdt_quad_edge *cdt_get_portal_edge(cdt_triangle src, cdt_triangle dst) {
     for (int i = 0; i < 3; ++i) {
         cdt_quad_edge *e1 = cdt_sym(src.edges[i]);
