@@ -57,6 +57,7 @@
 //   the latter seems quite challenging.
 
 #include <stdint.h>
+#include <stdlib.h>
 #include <math.h>
 #include <string.h>
 
@@ -173,6 +174,7 @@ CDTDEF void           cdt_insert(cdt_context *ctx, cdt_id id, cdt_float x1, cdt_
 CDTDEF void           cdt_remove(cdt_context *ctx, cdt_id id);
 
 CDTDEF int            cdt_is_constrained(cdt_edge *edge);
+CDTDEF int            cdt_is_quad_edge_constrained(cdt_quad_edge *edge);
 
 CDTDEF int            cdt_get_vertex_count(cdt_context *ctx);
 CDTDEF int            cdt_get_edge_count(cdt_context *ctx);
@@ -1137,6 +1139,9 @@ cdt_triangle cdt_get_triangle_containing_point(cdt_context *ctx, cdt_float x, cd
     return result;
 }
 
+// @Todo: If the edge is part of the super-triangle, the adjacent triangle will
+//        also be a super-triangle. This is a bit awkward.
+//
 cdt_triangles cdt_get_adjacent_triangles(cdt_triangle triangle) {
     cdt_triangles result = {0};
     for (int i = 0; i < 3; ++i) {
@@ -1175,6 +1180,10 @@ cdt_quad_edge *cdt_get_portal_edge(cdt_triangle src, cdt_triangle dst) {
 
 int cdt_is_constrained(cdt_edge *edge) {
     return edge->ids.num > 0;
+}
+
+int cdt_is_quad_edge_constrained(cdt_quad_edge *quad_edge) {
+    return cdt_is_constrained(cdt_get_edge(quad_edge));
 }
 
 void cdt_get_all_triangles(cdt_context *ctx, cdt_triangle *out_triangles) {
