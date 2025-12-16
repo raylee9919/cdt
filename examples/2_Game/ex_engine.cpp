@@ -45,7 +45,7 @@ void engine_init(GLFWwindow *window) {
     engine->window = window;
     engine->last_frame_time = glfwGetTime();
 
-#if 1
+#if 0
     engine->resolution.x = 2560.f;
     engine->resolution.y = 1440.f;
 #else

@@ -183,6 +183,20 @@ CDTDEF cdt_triangle   cdt_get_triangle_containing_point(cdt_context *ctx, cdt_fl
 CDTDEF cdt_triangles  cdt_get_adjacent_triangles(cdt_triangle triangle);
 CDTDEF cdt_quad_edge *cdt_get_portal_edge(cdt_triangle src, cdt_triangle dst);
 
+// Quad-Edge Operators
+CDTDEF cdt_edge      *cdt_get_edge(cdt_quad_edge *e);
+CDTDEF cdt_quad_edge *cdt_rot(cdt_quad_edge *e);
+CDTDEF cdt_quad_edge *cdt_inv_rot(cdt_quad_edge *e);
+CDTDEF cdt_quad_edge *cdt_sym(cdt_quad_edge *e);
+CDTDEF cdt_vertex    *cdt_dst(cdt_quad_edge *e);
+CDTDEF cdt_quad_edge *cdt_onext(cdt_quad_edge *e);
+CDTDEF cdt_quad_edge *cdt_oprev(cdt_quad_edge *e);
+CDTDEF cdt_quad_edge *cdt_lnext(cdt_quad_edge *e);
+CDTDEF cdt_quad_edge *cdt_lprev(cdt_quad_edge *e);
+CDTDEF cdt_quad_edge *cdt_dnext(cdt_quad_edge *e);
+CDTDEF cdt_quad_edge *cdt_dprev(cdt_quad_edge *e);
+CDTDEF cdt_quad_edge *cdt_rprev(cdt_quad_edge *e);
+
 
 #ifdef __cplusplus
 }
