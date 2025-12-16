@@ -1,5 +1,5 @@
 /* 
-   cdt - v0.2 - Dynamic 2D Constrained Delaunay Triangulation Library
+   cdt - v0.21 - Dynamic 2D Constrained Delaunay Triangulation Library
    Seong Woo Lee 2025
 
 

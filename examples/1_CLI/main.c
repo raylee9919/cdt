@@ -85,4 +85,26 @@ int main(void) {
         print_vertices(adj);
         printf("\n");
     }
+
+
+    // All that aside, I just want to print all edges.
+    //
+    printf("Printing all edges..\n");
+    for (int i = 0; i < ctx->edges.num; i+=1) {
+        cdt_edge *edge = ctx->edges.data[i];
+
+        cdt_quad_edge *quad_edge = edge->e;
+        {
+            cdt_vertex *origin = quad_edge->org;
+            cdt_vec2 coord = origin->pos;
+            printf("(%2.f, %.2f) <==> ", coord.x, coord.y);
+        }
+
+        cdt_quad_edge *sym_quad_edge = cdt_sym(quad_edge);
+        {
+            cdt_vertex *origin = sym_quad_edge->org;
+            cdt_vec2 coord = origin->pos;
+            printf("(%2.f, %.2f)\n", coord.x, coord.y);
+        }
+    }
 }
