@@ -116,8 +116,12 @@ Entity *engine_alloc_entity(Entity_Flags flags) {
 
 void engine_release_entity(Entity *entity) {
     // Remove chain
-    entity->prev = entity->next;
-    entity->next = entity->prev;
+    entity->prev->next = entity->next;
+    entity->next->prev = entity->prev;
+
+    if (entity->navmesh) {
+        cdt_remove(&engine->navmesh.ctx, entity->id);
+    }
 
     free(entity);
 }

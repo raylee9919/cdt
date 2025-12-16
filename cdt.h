@@ -49,6 +49,13 @@
        
 */
 
+// @Todo: 
+// - Optimization
+//      Use arena/pool and remove ptr to ptr.
+// - Traversing triangles is painful with the current quad-edge approach. I 
+//   have to either explore a triangle-based approach or retain triangles, and 
+//   the latter seems quite challenging.
+
 #include <stdint.h>
 #include <math.h>
 #include <string.h>
@@ -115,6 +122,7 @@ struct cdt_quad_edge {
     cdt_vertex    *org;
     cdt_quad_edge *onext_ptr;
     uint8_t        idx;       // [0,3]
+    uint8_t        visited;
 };
 
 struct cdt_edge {
@@ -546,20 +554,40 @@ cdt_vertex *cdt_create_vertex(cdt_context *ctx, cdt_vec2 pos) {
     return result;
 }
 
+// @Note: To exactly match real-world mathematics and avoid infinite loops,
+//        robust predicates (e.g., Shewchuk’s) are required. However, my goal
+//        here is a "good enough" triangle, and I want to avoid heavy numerical
+//        computations. For now, I simply stop pushing edges onto the stack
+//        once they have already been visited.
+//
 void cdt_flip_until_stack_is_empty(cdt_quad_edge_array *stk) {
+    cdt_quad_edge_array visited_array = {0};
+
     // Flip
     while (stk->num != 0) {
         cdt_quad_edge *e = cdt_stack_pop(stk);
 
+        if (e->visited) { continue; }
+        e->visited = 1;
+        cdt_quad_edge_array_push(&visited_array, e);
+
         // @Robustness
         if (!cdt_is_constrained(cdt_get_edge(e))) {
             if (cdt_in_circumcircle(cdt_dprev(e)->org->pos, cdt_dst(e)->pos, e->org->pos, cdt_dnext(e)->org->pos)) {
-                cdt_quad_edge_array_push(stk, cdt_lnext(e));
-                cdt_quad_edge_array_push(stk, cdt_dnext(e));
+                cdt_quad_edge *e1 = cdt_lnext(e);
+                cdt_quad_edge *e2 = cdt_dnext(e);
+                if (!e1->visited) { cdt_quad_edge_array_push(stk, e1); }
+                if (!e2->visited) { cdt_quad_edge_array_push(stk, e2); }
                 cdt_swap(e);
             }
         }
     }
+
+    // Cleanup
+    for (int i = 0; i < visited_array.num; i+=1) {
+        visited_array.data[i]->visited = 0;
+    }
+    free(visited_array.data);
 }
 
 void cdt_ear_triangulate_simple_polygon(cdt_context *ctx, int num_verts, cdt_vertex_sort_struct *verts) {
@@ -632,8 +660,10 @@ ear_found:
 
         cdt_assert(left_edge_in_face);
         cdt_assert(right_edge_in_face);
-        cdt_quad_edge *new_edge = cdt_connect(ctx, right_edge_in_face, left_edge_in_face);
-        cdt_quad_edge_array_push(&new_edges, new_edge);
+        cdt_quad_edge *edge1 = cdt_connect(ctx, right_edge_in_face, left_edge_in_face);
+        cdt_quad_edge *edge2 = cdt_sym(edge1);
+        cdt_quad_edge_array_push(&new_edges, edge1);
+        cdt_quad_edge_array_push(&new_edges, edge2);
 
         // clip the ear triangle.
         if (node_first == tip) {
@@ -933,6 +963,7 @@ void cdt_insert_segment(cdt_id id, cdt_vertex *vert1, cdt_vertex *vert2) {
                 cdt_queue_push(&intersectings, e);
             } else {
                 cdt_quad_edge_array_push(&flip_stack, e);
+                cdt_quad_edge_array_push(&flip_stack, cdt_sym(e));
             }
         } else {
             cdt_queue_push(&intersectings, e);

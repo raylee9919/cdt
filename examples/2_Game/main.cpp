@@ -195,8 +195,17 @@ int main(void) {
         }
 
 
-
-
+        // @Temporary:
+#if 0
+        if (engine->tick % 160 == 0) {
+            for (Entity *entity = engine->entity_sentinel->next; entity != engine->entity_sentinel; entity = entity->next) {
+                if (entity->navmesh) {
+                    engine_release_entity(entity);
+                    break;
+                }
+            }
+        }
+#endif
 
         // Draw navmesh
         //
