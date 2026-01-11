@@ -2,6 +2,18 @@
 setlocal
 cd /D "%~dp0"
 
+:: Get cl.exe
+where cl >nul 2>nul
+if %errorlevel%==1 (
+    echo Looking for 'vcvars64.bat'.. Recommended to run from the Developer Command Prompt.
+    @call "%ProgramFiles%\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"
+)
+
+where /q cl || (
+    echo [ERROR]: "cl" not found - please run this from the MSVC x64 native tools command prompt.
+    exit /b 1
+)
+
 if not exist build mkdir build
 pushd build
 

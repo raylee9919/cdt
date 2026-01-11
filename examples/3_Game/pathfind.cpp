@@ -205,6 +205,7 @@ void path_find(Entity *entity, Vec2 src, Vec2 dst) {
             entity->debug_triangles_in_path.push({dst_tri.x[2], dst_tri.y[2]});
         }
 
+        // @Todo: ??
         entity->order_position = entity->position;
 
 

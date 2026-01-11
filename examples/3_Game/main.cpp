@@ -145,7 +145,7 @@ int main(void) {
         player->order    = ORDER_TYPE_IDLE;
     }
 
-#if 0
+#if 1
     {
         Entity *skeleton = engine_alloc_entity(ENTITY_FLAG_DRAW|ENTITY_FLAG_ANIMATE|ENTITY_FLAG_FOE|ENTITY_FLAG_DIEABLE); 
         skeleton->position = vec2( 0.f, 70.f);
