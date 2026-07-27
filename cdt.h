@@ -1,5 +1,5 @@
 /* 
-   cdt - v0.22 - Dynamic 2D Constrained Delaunay Triangulation Library
+   cdt - v0.23 - Dynamic 2D Constrained Delaunay Triangulation Library
    Seong Woo Lee 2025
 
 
@@ -75,8 +75,9 @@ typedef int64_t       cdt_id;
 #endif
 
 #if !defined(CDT_MY_ALLOCATOR)
-#  define cdt_malloc    malloc
-#  define cdt_free      free
+#  define cdt_malloc        malloc
+#  define cdt_free          free
+#  define cdt_realloc       realloc
 #endif
 
 #ifdef CDT_STATIC
@@ -246,7 +247,7 @@ void cdt_vertex_array_push(cdt_vertex_array *arr, cdt_vertex *item) {
         arr->data = (cdt_vertex **)cdt_malloc(sizeof(item)*arr->cap);
     } else if (arr->num >= arr->cap) {
         arr->cap <<= 1;
-        arr->data = (cdt_vertex **)realloc(arr->data, sizeof(item)*arr->cap);
+        arr->data = (cdt_vertex **)cdt_realloc(arr->data, sizeof(item)*arr->cap);
     }
 
     arr->data[arr->num] = item;
@@ -269,7 +270,7 @@ void cdt_quad_edge_array_push(cdt_quad_edge_array *arr, cdt_quad_edge *item) {
         arr->data = (cdt_quad_edge **)cdt_malloc(sizeof(item)*arr->cap);
     } else if (arr->num >= arr->cap) {
         arr->cap <<= 1;
-        arr->data = (cdt_quad_edge **)realloc(arr->data, sizeof(item)*arr->cap);
+        arr->data = (cdt_quad_edge **)cdt_realloc(arr->data, sizeof(item)*arr->cap);
     }
 
     arr->data[arr->num] = item;
@@ -298,7 +299,7 @@ void cdt_edge_array_push(cdt_edge_array *arr, cdt_edge *item) {
         arr->data = (cdt_edge **)cdt_malloc(sizeof(item)*arr->cap);
     } else if (arr->num >= arr->cap) {
         arr->cap <<= 1;
-        arr->data = (cdt_edge **)realloc(arr->data, sizeof(item)*arr->cap);
+        arr->data = (cdt_edge **)cdt_realloc(arr->data, sizeof(item)*arr->cap);
     }
 
     arr->data[arr->num] = item;
@@ -321,7 +322,7 @@ void cdt_id_array_push(cdt_id_array *arr, cdt_id item) {
         arr->data = (cdt_id *)cdt_malloc(sizeof(item)*arr->cap);
     } else if (arr->num >= arr->cap) {
         arr->cap <<= 1;
-        arr->data = (cdt_id *)realloc(arr->data, sizeof(item)*arr->cap);
+        arr->data = (cdt_id *)cdt_realloc(arr->data, sizeof(item)*arr->cap);
     }
 
     arr->data[arr->num] = item;
