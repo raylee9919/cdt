@@ -9,6 +9,8 @@
    ======================================================================== */
 
 #include <stdio.h>
+
+#define CDT_IMPLEMENTATION
 #include "../../cdt.h"
 
 void print_vertices(cdt_triangle tri) {

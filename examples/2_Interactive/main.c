@@ -24,6 +24,8 @@
 #include "../vendor/stb/stb_ds.h"
 #include "../vendor/glad/glad.h"
 #include "../vendor/GLFW/glfw3.h"
+
+#define CDT_IMPLEMENTATION
 #include "../../cdt.h"
 #include "ex_math.h"
 #include "ex_shape.h"

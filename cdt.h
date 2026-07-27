@@ -1,5 +1,5 @@
 /* 
-   cdt - v0.21 - Dynamic 2D Constrained Delaunay Triangulation Library
+   cdt - v0.22 - Dynamic 2D Constrained Delaunay Triangulation Library
    Seong Woo Lee 2025
 
 
@@ -17,6 +17,8 @@
 
 
    USAGE
+       #define CDT_IMPLEMENTATION in one source file before including the header.
+
        First, initialize your 'cdt_context'.
 
            void cdt_init(cdt_context *ctx,
@@ -62,8 +64,20 @@
 #include <string.h>
 
 typedef float         cdt_float;
-typedef unsigned int  cdt_id;
-#define cdt_assert(exp) if (!(exp)) {*(volatile int*)0=0;}
+typedef int64_t       cdt_id;
+
+#if !defined(CDT_NO_ASSERT)
+#  ifdef _WIN32
+#    define cdt_assert(exp) if (!(exp)) { __debugbreak(); }
+#  else
+#    define cdt_assert(exp) if (!(exp)) {*(volatile int*)0=0;}
+#  endif
+#endif
+
+#if !defined(CDT_MY_ALLOCATOR)
+#  define cdt_malloc    malloc
+#  define cdt_free      free
+#endif
 
 #ifdef CDT_STATIC
 #  define CDTDEF static
@@ -75,9 +89,9 @@ typedef unsigned int  cdt_id;
 extern "C" {
 #endif
 
-typedef struct cdt_vertex cdt_vertex;
-typedef struct cdt_quad_edge cdt_quad_edge;
-typedef struct cdt_edge cdt_edge;
+typedef struct cdt_vertex       cdt_vertex;
+typedef struct cdt_quad_edge    cdt_quad_edge;
+typedef struct cdt_edge         cdt_edge;
 
 typedef struct {
     cdt_float x, y;
@@ -205,6 +219,10 @@ CDTDEF cdt_quad_edge *cdt_rprev(cdt_quad_edge *e);
 #endif
 
 
+
+#ifdef CDT_IMPLEMENTATION
+
+
 //void cdt_log(cdt_context *ctx) {
 //    FILE *file = fopen("subdivision.log", "wb");
 //    if (file) {
@@ -225,7 +243,7 @@ CDTDEF cdt_quad_edge *cdt_rprev(cdt_quad_edge *e);
 void cdt_vertex_array_push(cdt_vertex_array *arr, cdt_vertex *item) {
     if (arr->cap == 0) {
         arr->cap = 16;
-        arr->data = (cdt_vertex **)malloc(sizeof(item)*arr->cap);
+        arr->data = (cdt_vertex **)cdt_malloc(sizeof(item)*arr->cap);
     } else if (arr->num >= arr->cap) {
         arr->cap <<= 1;
         arr->data = (cdt_vertex **)realloc(arr->data, sizeof(item)*arr->cap);
@@ -248,7 +266,7 @@ void cdt_vertex_array_pop(cdt_vertex_array *arr, cdt_vertex *item) {
 void cdt_quad_edge_array_push(cdt_quad_edge_array *arr, cdt_quad_edge *item) {
     if (arr->cap == 0) {
         arr->cap = 16;
-        arr->data = (cdt_quad_edge **)malloc(sizeof(item)*arr->cap);
+        arr->data = (cdt_quad_edge **)cdt_malloc(sizeof(item)*arr->cap);
     } else if (arr->num >= arr->cap) {
         arr->cap <<= 1;
         arr->data = (cdt_quad_edge **)realloc(arr->data, sizeof(item)*arr->cap);
@@ -277,7 +295,7 @@ cdt_quad_edge *cdt_stack_pop(cdt_quad_edge_array *arr) {
 void cdt_edge_array_push(cdt_edge_array *arr, cdt_edge *item) {
     if (arr->cap == 0) {
         arr->cap = 16;
-        arr->data = (cdt_edge **)malloc(sizeof(item)*arr->cap);
+        arr->data = (cdt_edge **)cdt_malloc(sizeof(item)*arr->cap);
     } else if (arr->num >= arr->cap) {
         arr->cap <<= 1;
         arr->data = (cdt_edge **)realloc(arr->data, sizeof(item)*arr->cap);
@@ -300,7 +318,7 @@ void cdt_edge_array_pop(cdt_edge_array *arr, cdt_edge *item) {
 void cdt_id_array_push(cdt_id_array *arr, cdt_id item) {
     if (arr->cap == 0) {
         arr->cap = 16;
-        arr->data = (cdt_id *)malloc(sizeof(item)*arr->cap);
+        arr->data = (cdt_id *)cdt_malloc(sizeof(item)*arr->cap);
     } else if (arr->num >= arr->cap) {
         arr->cap <<= 1;
         arr->data = (cdt_id *)realloc(arr->data, sizeof(item)*arr->cap);
@@ -313,12 +331,12 @@ void cdt_id_array_push(cdt_id_array *arr, cdt_id item) {
 void cdt_queue_push(cdt_queue *q, cdt_quad_edge *e) {
     if (q->cap == 0) {
         q->cap = 32;
-        q->data = (cdt_quad_edge **)malloc(sizeof(cdt_quad_edge *)*q->cap);
+        q->data = (cdt_quad_edge **)cdt_malloc(sizeof(cdt_quad_edge *)*q->cap);
     }
 
     if ((q->back+1)%q->cap == q->front) {
         int new_cap = (q->cap << 1);
-        cdt_quad_edge **ptr = (cdt_quad_edge **)malloc(sizeof(cdt_quad_edge *)*new_cap);
+        cdt_quad_edge **ptr = (cdt_quad_edge **)cdt_malloc(sizeof(cdt_quad_edge *)*new_cap);
         for (int j = 0, i = q->front; i != q->back; j+=1, i = ((i+1)%q->cap)) {
             ptr[j] = q->data[i];
         }
@@ -327,7 +345,7 @@ void cdt_queue_push(cdt_queue *q, cdt_quad_edge *e) {
         q->back  = q->cap;
         q->cap   = new_cap;
 
-        free(q->data);
+        cdt_free(q->data);
         q->data = ptr;
     }
 
@@ -434,7 +452,7 @@ void cdt_swap(cdt_quad_edge *e) {
 }
 
 cdt_quad_edge *cdt_create_edge(cdt_context *ctx, cdt_vertex *org, cdt_vertex *dst) {
-    cdt_edge *edge = (cdt_edge *)malloc(sizeof(cdt_edge));
+    cdt_edge *edge = (cdt_edge *)cdt_malloc(sizeof(cdt_edge));
     memset(edge, 0, sizeof(cdt_edge));
 
     cdt_edge_array_push(&ctx->edges, edge);
@@ -472,7 +490,7 @@ void cdt_destroy_edge(cdt_context *ctx, cdt_quad_edge *e) {
     cdt_edge *edge = cdt_get_edge(e);
     cdt_edge_array_pop(&ctx->edges, edge);
 
-    free(edge);
+    cdt_free(edge);
 }
 
 cdt_quad_edge *cdt_connect(cdt_context *ctx, cdt_quad_edge *a, cdt_quad_edge *b) {
@@ -563,7 +581,7 @@ int cdt_in_triangle(cdt_vec2 p, cdt_vec2 a, cdt_vec2 b, cdt_vec2 c) {
 }
 
 cdt_vertex *cdt_create_vertex(cdt_context *ctx, cdt_vec2 pos) {
-    cdt_vertex *result = (cdt_vertex *)malloc(sizeof(cdt_vertex));
+    cdt_vertex *result = (cdt_vertex *)cdt_malloc(sizeof(cdt_vertex));
     memset(result, 0, sizeof(cdt_vertex));
     result->pos = pos;
     cdt_vertex_array_push(&ctx->vertices, result);
@@ -603,7 +621,7 @@ void cdt_flip_until_stack_is_empty(cdt_quad_edge_array *stk) {
     for (int i = 0; i < visited_array.num; i+=1) {
         visited_array.data[i]->visited = 0;
     }
-    free(visited_array.data);
+    cdt_free(visited_array.data);
 }
 
 void cdt_ear_triangulate_simple_polygon(cdt_context *ctx, int num_verts, cdt_vertex_sort_struct *verts) {
@@ -611,7 +629,7 @@ void cdt_ear_triangulate_simple_polygon(cdt_context *ctx, int num_verts, cdt_ver
 
     // Preprocessing..
     int num = num_verts;
-    cdt_index_node *nodes = (cdt_index_node *)malloc(sizeof(cdt_index_node)*num);
+    cdt_index_node *nodes = (cdt_index_node *)cdt_malloc(sizeof(cdt_index_node)*num);
     for (int i = 0; i < num; ++i) {
         nodes[i].next = &nodes[(i+1)%num];
         nodes[i].idx  = i;
@@ -691,8 +709,8 @@ ear_found:
 
     cdt_flip_until_stack_is_empty(&new_edges);
 
-    free(nodes);
-    free(new_edges.data);
+    cdt_free(nodes);
+    cdt_free(new_edges.data);
 }
 
 // @Robustness:
@@ -729,13 +747,13 @@ void cdt_destroy_vertex(cdt_context *ctx, cdt_vertex *vert) {
         num_edges += 1;
     }
 
-    cdt_quad_edge **edges_to_destroy = (cdt_quad_edge **)malloc(sizeof(cdt_quad_edge *)*num_edges);
+    cdt_quad_edge **edges_to_destroy = (cdt_quad_edge **)cdt_malloc(sizeof(cdt_quad_edge *)*num_edges);
     for (int i = 0; i < vert->edges.num; i+=1) {
         edges_to_destroy[i] = vert->edges.data[i];
     }
 
     // Angular sort outline vertices ccw.
-    cdt_vertex_sort_struct *outline = (cdt_vertex_sort_struct *)malloc(sizeof(cdt_vertex_sort_struct)*num_edges);
+    cdt_vertex_sort_struct *outline = (cdt_vertex_sort_struct *)cdt_malloc(sizeof(cdt_vertex_sort_struct)*num_edges);
     for (int i = 0; i < num_edges; i += 1) {
         cdt_quad_edge *e = edges_to_destroy[i];
         outline[i].vert = cdt_dst(e);
@@ -750,9 +768,9 @@ void cdt_destroy_vertex(cdt_context *ctx, cdt_vertex *vert) {
 
     // Cleanup
     cdt_vertex_array_pop(&ctx->vertices, vert);
-    free(outline);
-    free(edges_to_destroy);
-    free(vert);
+    cdt_free(outline);
+    cdt_free(edges_to_destroy);
+    cdt_free(vert);
 }
 
 // 0. If the point is outside of the super-triangle,
@@ -881,7 +899,7 @@ cdt_vertex *cdt_insert_point(cdt_context *ctx, cdt_vec2 pos) {
         } while (side != start_side);
 
         cdt_flip_until_stack_is_empty(&check_stack);
-        free(check_stack.data);
+        cdt_free(check_stack.data);
     }
 
 
@@ -1017,8 +1035,8 @@ void cdt_insert_segment(cdt_id id, cdt_vertex *vert1, cdt_vertex *vert2) {
     // perform edge flips, since constrained edges will be skipped.
     //
     cdt_flip_until_stack_is_empty(&flip_stack);
-    free(flip_stack.data);
-    free(intersectings.data);
+    cdt_free(flip_stack.data);
+    cdt_free(intersectings.data);
 }
 
 //
@@ -1103,7 +1121,7 @@ void cdt_remove(cdt_context *ctx, cdt_id id) {
         if (should_destroy) { cdt_destroy_vertex(ctx, v); }
     }
 
-    free(vertices.data);
+    cdt_free(vertices.data);
 }
 
 int cdt_get_vertex_count(cdt_context *ctx) {
@@ -1188,7 +1206,7 @@ int cdt_is_quad_edge_constrained(cdt_quad_edge *quad_edge) {
 
 void cdt_get_all_triangles(cdt_context *ctx, cdt_triangle *out_triangles) {
     int num_edge = cdt_get_edge_count(ctx);
-    cdt_quad_edge **quad_edge_visited = (cdt_quad_edge **)malloc(sizeof(cdt_quad_edge *)*num_edge*2);
+    cdt_quad_edge **quad_edge_visited = (cdt_quad_edge **)cdt_malloc(sizeof(cdt_quad_edge *)*num_edge*2);
     int next = 0;
 
     // DFS.
@@ -1230,8 +1248,12 @@ void cdt_get_all_triangles(cdt_context *ctx, cdt_triangle *out_triangles) {
         cdt_quad_edge_array_push(&stk, cdt_sym(e3));
     }
 
-    free(quad_edge_visited);
+    cdt_free(quad_edge_visited);
 }
+
+
+
+#endif
 
 
 
